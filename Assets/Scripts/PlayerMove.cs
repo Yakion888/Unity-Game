@@ -71,6 +71,7 @@ public class EldenRingMovement : MonoBehaviour
     public GameObject runningAttackEffect;       // 滑行攻击特效
     public GameObject skillEffect;               // 技能特效
     public GameObject hitEffect;                 // 命中特效
+    public GameObject skillHitEffect;            // 1技能专属的带火属性的命中爆点特效
     public Transform weaponPoint;                // 武器挂载点（剑尖）
 
     [Header("击退值设置")]
@@ -2257,58 +2258,40 @@ public class EldenRingMovement : MonoBehaviour
     // 技能伤害方法（供动画事件调用）
     public void CastDamage()
     {
-        Debug.Log("技能伤害判定触发");
+        Debug.Log("大招裂地剑气触发！");
 
-        //生成 1 技能的裂地火焰月牙波特效
-        if (skillEffect != null)
-        {
-            // 1. 设置生成位置：在玩家正前方 1.5 米处
-            Vector3 vfxPos = transform.position + transform.forward * 1.5f;
-            // 稍微抬高 1 米，防止这种贴地波特效被地面的网格吞没
-            vfxPos.y += 1.0f; 
-
-            // 2. 设置旋转角度：让月牙波完美顺着玩家面朝的方向（而不是跟着乱转的剑尖）
-            GameObject waveVFX = Instantiate(skillEffect, vfxPos, transform.rotation);
-
-            // 3. 设定 3 秒后销毁内存，防止特效越积越多卡死游戏
-            Destroy(waveVFX, 3f);
-        }
-
-
-        // ✅ 【核心修复】：必须把 attackPowerBonus 乘以你的 castDamageScalingMultiplier 技能倍率！
+        // 1. 计算出本次大招的【总真实伤害】
         float scaledBonusDamage = attackPowerBonus * castDamageScalingMultiplier;
         float totalDamage = castDamage + scaledBonusDamage;
-        
         float randomMultiplier = Random.Range(0.9f, 1.1f);
-        int finalSkillDamage = Mathf.RoundToInt(totalDamage * randomMultiplier);
-    
-        Collider[] hitColliders = Physics.OverlapSphere(transform.position, castRadius);
-        bool hitEnemy = false;
-        HashSet<BasicEnemyTest> damagedEnemies = new HashSet<BasicEnemyTest>();
-    
-        foreach (var hit in hitColliders)
+        int finalTotalSkillDamage = Mathf.RoundToInt(totalDamage * randomMultiplier);
+
+        // 2. 生成会飞的剑气波
+        if (skillEffect != null)
         {
-            BasicEnemyTest enemy = hit.GetComponent<BasicEnemyTest>();
-            if (enemy != null && !damagedEnemies.Contains(enemy))
-            {
-                damagedEnemies.Add(enemy); 
+            // 在身前 1.5 米处生成，稍微抬高一点防止遁地
+            Vector3 vfxPos = transform.position + transform.forward * 1.5f;
+            vfxPos.y += 0.2f; 
 
-               Vector3 enemyPos = enemy.transform.position;
-                Vector3 playerPos = transform.position;
-                enemyPos.y = 0;
-                playerPos.y = 0;
-                Vector3 knockbackDir = (enemyPos - playerPos).normalized;
+            // 生成特效，保留预制体自身调整好的角度（比如 Z=90）
+            GameObject waveVFX = Instantiate(skillEffect, vfxPos, transform.rotation * skillEffect.transform.rotation);
 
-                // 传入计算后的最终真实伤害：finalSkillDamage
-                enemy.TakeKnockbackWithUp(knockbackDir, castKnockbackForce, finalSkillDamage, castKnockupForce, 2);
-                Debug.Log($"技能命中敌人！基础:{castDamage} + 加成:{scaledBonusDamage:F1} = 玩家输出(未计护甲):{finalSkillDamage}");
-                hitEnemy = true;
-            }
+            // 给生成的特效挂上我们刚写的飞行脚本，并把伤害和方向传给它
+            SkillWave waveScript = waveVFX.AddComponent<SkillWave>();
+            // 决定用哪个火花！如果有技能专属火花就用专属的，否则拿白字火花兜底
+            GameObject vfxToPass = skillHitEffect != null ? skillHitEffect : hitEffect;
+
+            // 预期打满 4 次伤害。将击退力度强行放大 1.8 倍！让怪物的后退速度完美匹配剑气的飞行速度！
+            int expectedHits = 4; 
+            
+            waveScript.Initialize(finalTotalSkillDamage, expectedHits, castKnockbackForce * 1.8f, 3f, enemyLayer, transform.forward, vfxToPass);
+
+            // 3秒后销毁剑气
+            Destroy(waveVFX, 3f);
         }
-    
-        if (!hitEnemy)
+        else
         {
-            Debug.Log("技能未命中任何敌人");
+            Debug.LogWarning("技能特效为空，无法释放剑气波！");
         }
     }
 
