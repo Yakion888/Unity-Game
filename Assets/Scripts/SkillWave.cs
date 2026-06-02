@@ -4,23 +4,27 @@ using System.Collections.Generic;
 public class SkillWave : MonoBehaviour
 {
     [Header("剑气运动设置")]
-    public float moveSpeed = 8f;         // 🌟【提高移速】：让大招显得更加迅猛
-    public float damageRadius = 1.5f;    // 🌟【核心修复 1】：判定球缩小到 1.5 米！只有真正碰到的瞬间才掉血！
-    public float tickInterval = 0.25f;   // 🌟【加快频率】：每 0.25 秒切一次，打击感更绵密
+    public float moveSpeed = 8f;         
+    
+    [Header("【核心】精准判定盒调优")]
+    public Vector3 hitboxSize = new Vector3(2f, 6f, 0.5f);  // 红框变成“竖着的门板”
+    public float hitboxOffsetZ = 0f;                       // 判定盒的前后偏移（用来绝对对齐特效的视觉中心）
+    public float hitboxOffsetY = 1.5f;                      //Y 轴上下偏移，方便对齐高大的竖向剑气
+    
+    public float tickInterval = 0.15f;    // 极快判定频率（0.15秒），让怪物死死“黏”在剑气上！
+    //特效冷却时间！防止光污染
+    public float vfxCooldown = 0.4f;   
 
-    // 接收从玩家那里传过来的属性
     private int damagePerTick;
     private float pushForce;
     private float upForce;
     private LayerMask enemyLayer;
     private Vector3 moveDirection;
-
-    // 🌟【核心变量】：接收玩家的命中特效预制体（你刚才就是漏掉了这一行！）
     private GameObject hitEffectPrefab;  
-
     private float timer = 0f;
+    //用一个“字典”记住每一个怪物最后一次爆火花的时间
+    private Dictionary<BasicEnemyTest, float> lastVfxTime = new Dictionary<BasicEnemyTest, float>();
 
-    // 接收参数的初始化方法
     public void Initialize(int totalDamage, int totalTicks, float pForce, float uForce, LayerMask layer, Vector3 dir, GameObject hitVFX)
     {
         damagePerTick = Mathf.Max(1, totalDamage / totalTicks); 
@@ -29,16 +33,17 @@ public class SkillWave : MonoBehaviour
         enemyLayer = layer;
         moveDirection = dir.normalized;
         moveDirection.y = 0; 
-        
-        hitEffectPrefab = hitVFX; // 将玩家传过来的特效存到变量里
+        hitEffectPrefab = hitVFX; 
 
-        DealDamageTick();
+        DealDamageTick(); // 生成瞬间砍一刀
     }
 
     void Update()
     {
+        // 剑气匀速飞行
         transform.position += moveDirection * moveSpeed * Time.deltaTime;
 
+        // 高频切割判定
         timer += Time.deltaTime;
         if (timer >= tickInterval)
         {
@@ -49,7 +54,10 @@ public class SkillWave : MonoBehaviour
 
     private void DealDamageTick()
     {
-        Collider[] hits = Physics.OverlapSphere(transform.position, damageRadius, enemyLayer);
+        // 修复 1：用薄薄的长方体（Box）取代圆球！绝不提前命中，绝不拖泥带水
+        Vector3 boxCenter = transform.position + transform.forward * hitboxOffsetZ + transform.up * hitboxOffsetY;
+        Collider[] hits = Physics.OverlapBox(boxCenter, hitboxSize / 2f, transform.rotation, enemyLayer);
+        
         HashSet<BasicEnemyTest> damagedEnemies = new HashSet<BasicEnemyTest>();
 
         foreach (var hit in hits)
@@ -59,36 +67,51 @@ public class SkillWave : MonoBehaviour
             {
                 damagedEnemies.Add(enemy);
 
-                // 把敌人击飞并向后推
-                enemy.TakeKnockbackWithUp(moveDirection, pushForce, damagePerTick, upForce, 2, 0.6f);
+                // 修复 2：“乘浪”击退！因为判定极快(0.15s)，怪物会被高频的小推力死死顶住，和剑气保持绝对的同步速度向后平移
+                enemy.TakeKnockbackWithUp(moveDirection, pushForce, damagePerTick, upForce, 2, 0.4f);
                 
-                // 🌟【核心修复】：精准定位命中特效，并焊死在怪物身上！
+                // 精准火花挂载
                 if (hitEffectPrefab != null)
                 {
-                    // 1. 锁定怪物胸口高度（1.2米）
-                    Vector3 chestPos = enemy.transform.position + Vector3.up * 1.2f;
-                    
-                    // 2. 为了看起来更真实，让火花往剑气飞来的方向（迎着刀刃）稍微偏移 0.3 米
-                    Vector3 sparkPos = chestPos - moveDirection * 0.3f;
+                    // 检查字典：如果这个怪从来没爆过特效，或者距离上次爆特效已经过了 vfxCooldown (0.4秒)
+                    if (!lastVfxTime.ContainsKey(enemy) || Time.time - lastVfxTime[enemy] >= vfxCooldown)
+                    {
+                        // 记录这次爆特效的时间
+                        lastVfxTime[enemy] = Time.time;
 
-                    // 3. 生成特效，让火花面向剑气飞行的反方向喷射
-                    GameObject effect = Instantiate(hitEffectPrefab, sparkPos, Quaternion.LookRotation(-moveDirection));
-                    
-                    // ✅ 【神级操作】：把生成的火花强行变成怪物的“子物体”！
-                    // 这样怪物被击退、击飞在空中疯狂后仰时，伤口处的火花会死死粘在它胸口跟着一起动！
-                    effect.transform.SetParent(enemy.transform, true);
+                        // 特效排他性清理,寻找怪物身上有没有上一波还没消散完的旧火花（通过名字识别），如果有，直接销毁，为新火花腾地方
+                        Transform oldSpark = enemy.transform.Find("Unique_SkillHitSpark");
+                        if (oldSpark != null)
+                        {
+                            Destroy(oldSpark.gameObject);
+                        }
 
-                    // 1秒后销毁防止内存泄漏
-                    Destroy(effect, 1.0f); 
+                        // 生成特效
+                        Vector3 chestPos = enemy.transform.position + Vector3.up * 1.2f;
+                        Vector3 sparkPos = chestPos - moveDirection * 0.2f;
+                        GameObject effect = Instantiate(hitEffectPrefab, sparkPos, Quaternion.LookRotation(-moveDirection));
+                        
+                        //方便识别和清理
+                        effect.name = "Unique_SkillHitSpark";
+
+                        effect.transform.SetParent(enemy.transform, true);
+                        Destroy(effect, 1.0f); 
+                    }
                 }
             }
         }
     }
 
-    // 辅助测试：在 Scene 窗口画出剑气的杀伤范围
-    private void OnDrawGizmosSelected()
+    // 可视化排障：在 Scene 窗口亲眼看见你隐形的刀刃
+    private void OnDrawGizmos()
     {
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, damageRadius);
+        Gizmos.color = new Color(1f, 0f, 0f, 0.4f); // 半透明红色
+        // 随时间偏移的盒子中心
+        Vector3 boxCenter = transform.position + transform.forward * hitboxOffsetZ + transform.up * hitboxOffsetY;
+        // 把绘制矩阵和特效对齐
+        Matrix4x4 rotationMatrix = Matrix4x4.TRS(boxCenter, transform.rotation, Vector3.one);
+        Gizmos.matrix = rotationMatrix;
+        // 画出这个薄片判定盒
+        Gizmos.DrawCube(Vector3.zero, hitboxSize);
     }
 }

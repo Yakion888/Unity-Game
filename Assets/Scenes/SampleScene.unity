@@ -14285,9 +14285,9 @@ MonoBehaviour:
   - {fileID: 5545173171955001552, guid: 7ac879c2caac1ca41b6c438e77d8b25d, type: 3}
   lightAttackEffects: []
   runningAttackEffect: {fileID: 1116249604692860204, guid: 8a02c4042c68dd244abad8cf394dab42, type: 3}
-  skillEffect: {fileID: 5263168960865818613, guid: 186f3c59b0e5c2e4cb5d5b00f72b4d77, type: 3}
+  skillEffect: {fileID: 4122001234651178622, guid: 3eb9a9285d5f5f9428602ee71e041e00, type: 3}
   hitEffect: {fileID: 1035977224672214417, guid: 057aa477789506a44bd206e9c5acad19, type: 3}
-  skillHitEffect: {fileID: 6360114440195830949, guid: aec3264849dfb9a46bf22908c3b111ea, type: 3}
+  skillHitEffect: {fileID: 1794054703147876750, guid: 852ef6640dca43f4ca3c52917fb2797f, type: 3}
   weaponPoint: {fileID: 1915195200}
   heavyAttackKnockback:
   - 5
@@ -14310,7 +14310,7 @@ MonoBehaviour:
   currentRage: 0
   baseRageRegenRate: 2
   maxRageRegenRate: 15
-  ragePerDamageMultiplier: 0.15
+  ragePerDamageMultiplier: 2
   rageDecayRate: 5
   respawnPosition: {x: 0, y: 0, z: 0}
   respawnRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -14351,6 +14351,9 @@ MonoBehaviour:
   castKnockbackForce: 15
   castKnockupForce: 8
   castRadius: 3
+  skillWavePushForce: 8
+  skillWaveUpForce: 2
+  skillWaveLifetime: 2
   ultimateSlashBaseDamage: 30
   ultimateBaseDamage: 100
   ultimateQTEBonus: 4

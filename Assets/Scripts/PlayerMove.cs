@@ -166,6 +166,9 @@ public class EldenRingMovement : MonoBehaviour
     public float castKnockbackForce = 15f; //// 水平击退
     public float castKnockupForce = 15f;  //浮空力度
     public float castRadius = 3f;  // 技能范围
+    public float skillWavePushForce = 6f;  // 剑气每段的水平推力（建议4~6，用来匹配剑气飞行速度）
+    public float skillWaveUpForce = 2f;    // 剑气每段的微小浮空力（给个2f能抵消地面摩擦力，让怪更丝滑地跟着飞）
+    public float skillWaveLifetime = 1.5f; // 剑气物理存活时间（默认1.5秒）
 
     [Header("终极大招 (QTE系统)")]
     public int ultimateSlashBaseDamage = 30;  // 前四段上挑的基础伤害（通常比最后一下低，用来打连击）
@@ -2271,23 +2274,23 @@ public class EldenRingMovement : MonoBehaviour
         {
             // 在身前 1.5 米处生成，稍微抬高一点防止遁地
             Vector3 vfxPos = transform.position + transform.forward * 1.5f;
-            vfxPos.y += 0.2f; 
+            vfxPos.y += 1.0f; 
 
             // 生成特效，保留预制体自身调整好的角度（比如 Z=90）
             GameObject waveVFX = Instantiate(skillEffect, vfxPos, transform.rotation * skillEffect.transform.rotation);
 
-            // 给生成的特效挂上我们刚写的飞行脚本，并把伤害和方向传给它
-            SkillWave waveScript = waveVFX.AddComponent<SkillWave>();
-            // 决定用哪个火花！如果有技能专属火花就用专属的，否则拿白字火花兜底
-            GameObject vfxToPass = skillHitEffect != null ? skillHitEffect : hitEffect;
+            // 直接 GetComponent 获取特效脚本
+            SkillWave waveScript = waveVFX.GetComponent<SkillWave>();
 
-            // 预期打满 4 次伤害。将击退力度强行放大 1.8 倍！让怪物的后退速度完美匹配剑气的飞行速度！
-            int expectedHits = 4; 
-            
-            waveScript.Initialize(finalTotalSkillDamage, expectedHits, castKnockbackForce * 1.8f, 3f, enemyLayer, transform.forward, vfxToPass);
+            // 把它改为打 10 次伤害（3秒内高频切割）
+            int totalTicks = 10;
+            // 判断一下，如果有专属技能火花就用专属的，没有才用普通白字火花兜底！
+            GameObject vfxToPass = skillHitEffect != null ? skillHitEffect : hitEffect;    
+            //把硬编码替换为面板变量 skillWavePushForce 和 skillWaveUpForce
+            waveScript.Initialize(finalTotalSkillDamage, totalTicks, skillWavePushForce, skillWaveUpForce, enemyLayer, transform.forward, vfxToPass);
 
-            // 3秒后销毁剑气
-            Destroy(waveVFX, 3f);
+            // 使用面板变量控制销毁时间 
+            Destroy(waveVFX, skillWaveLifetime);
         }
         else
         {
