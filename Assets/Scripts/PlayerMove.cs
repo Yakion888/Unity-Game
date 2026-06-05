@@ -2,7 +2,7 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;  
 using UnityEngine.UI;
-using UnityEngine.Animations.Rigging; // 👈 【新增】引入动画绑定库
+using UnityEngine.Animations.Rigging; // 引入动画绑定库
 
 public class EldenRingMovement : MonoBehaviour
 {
@@ -1522,21 +1522,18 @@ public class EldenRingMovement : MonoBehaviour
 
                 StartCoroutine(HitStop()); 
 
-                Vector3 hitPoint;
-                Vector3 rayOrigin = weaponPoint != null ? weaponPoint.position : (transform.position + Vector3.up * 1.5f);
-                Vector3 targetCenter = hit.bounds.center;
-                Vector3 rayDir = (targetCenter - rayOrigin).normalized;
+                // 用绝对的数学逻辑定位火花！无视那个5米的大圆球！
+                // 1. 找到怪物真正的肉体中心（胸口大约 1.2 米高的地方）
+                Vector3 chestPos = enemy.transform.position + Vector3.up * 1.2f;
+                
+                // 2. 迎着玩家的刀刃方向（玩家与怪物的连线），稍微往外挪 0.3 米，营造砍在表皮的错觉
+                Vector3 sparkPos = chestPos + (transform.position - enemy.transform.position).normalized * 0.3f;
+                
+                // 3. 读取你之前配好的锁敌点（胸口骨骼），没有的话就绑在怪物根节点
+                Transform attachTarget = enemy.lockOnPoint != null ? enemy.lockOnPoint : enemy.transform;
 
-                if (Physics.Raycast(rayOrigin, rayDir, out RaycastHit rayHit, attackRadius * 2f, enemyLayer))
-                {
-                    hitPoint = rayHit.point;
-                }
-                else
-                {
-                    hitPoint = hit.ClosestPoint(transform.position + Vector3.up * 1.5f);
-                }
-
-                SpawnHitEffect(hitEffect, hitPoint, enemy.transform);
+                // 4. 生成绝对精准的受击火花！
+                SpawnHitEffect(hitEffect, sparkPos, attachTarget);
                 
                 if (isLightAttacking) PlayLightAttackHit();
                 else if (isAttacking || isRunningAttack) PlayAttackHit();
@@ -1737,7 +1734,7 @@ public class EldenRingMovement : MonoBehaviour
         float maxDist = dirToWeapon.magnitude;
         Vector3 finalSpawnPos = defaultSpawnPos;
 
-        // 🎯 动态限距核心逻辑：防穿模到敌人身后
+        // 动态限距核心逻辑：防穿模到敌人身后
         // 用一个粗一点的 SphereCast (半径0.3f) 扫向武器点
         if (Physics.SphereCast(playerChest, 0.3f, dirToWeapon.normalized, out RaycastHit hit, maxDist, enemyLayer))
         {
@@ -1745,7 +1742,7 @@ public class EldenRingMovement : MonoBehaviour
             finalSpawnPos = playerChest + dirToWeapon.normalized * Mathf.Max(0, hit.distance - 0.1f);
         }
 
-        // 🎯 根据攻击段数获取不同的旋转
+        // 根据攻击段数获取不同的旋转
         Quaternion spawnRot = GetAttackRotation();
         GameObject effect = Instantiate(effectPrefab, finalSpawnPos, spawnRot);
     
