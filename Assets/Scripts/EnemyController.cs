@@ -417,6 +417,10 @@ public class BasicEnemyTest : MonoBehaviour
         if (isDead) return;
         isDead = true;
 
+        // ----- 新增：通知任务管理器 -----
+        TaskManager tm = FindObjectOfType<TaskManager>();
+        if (tm != null) tm.ReportEnemyKilled();
+
         // 给玩家加经验
         EldenRingMovement playerMovement = player.GetComponent<EldenRingMovement>();
         if (playerMovement != null)
