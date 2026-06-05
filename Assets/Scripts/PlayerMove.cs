@@ -161,7 +161,7 @@ public class EldenRingMovement : MonoBehaviour
 
     [Header("技能系统")]
     public int castDamage = 100;
-    public float castDuration = 1.0f;  // 施法动画时长
+    public float castDuration = 3.0f;  // 施法动画时长
     public float castDamageScalingMultiplier = 2.5f; //大招的力量加成倍率 (比如 2.0 代表享受 200% 的攻击力加成)
     public float castKnockbackForce = 15f; //// 水平击退
     public float castKnockupForce = 15f;  //浮空力度
@@ -174,12 +174,14 @@ public class EldenRingMovement : MonoBehaviour
     public int ultimateSlashBaseDamage = 30;  // 前四段上挑的基础伤害（通常比最后一下低，用来打连击）
     public int ultimateBaseDamage = 100;      // 大招基础伤害
     public float ultimateQTEBonus = 3.0f;     // QTE成功后的伤害倍率 (比如4倍！)
-    // 👇 【新增】大招专属的击飞与砸地力度，方便在面板调节手感
     public float ultimateLaunchForce = 12f;   // 第五段的挑飞力度
     public float ultimateSlamForce = -20f;    // 最后砸地的下坠力度
     private bool isUltimateCasting = false;   // 是否正在释放大招
     private bool isWaitingForQTE = false;     // 是否正处于子弹时间等待按键
     private bool qteSuccess = false;          // QTE是否按成功了
+
+    private float lastEventTime = 0f;       // 记录上一次触发动画事件的真实时间，用于防抖
+
 
     [Header("终极大招音效 (QTE与连段)")]
     public AudioClip ultChargeSFX;          // 蓄力音效（按下大招瞬间播放）
@@ -187,6 +189,13 @@ public class EldenRingMovement : MonoBehaviour
     public AudioClip ultSlowMotionSFX;      // 空中滞留慢放音效（子弹时间高频耳鸣声）
     public AudioClip ultQTESuccessSFX;      // QTE按键成功音效（清脆的“叮”声，若空则默认用完美闪避音效）
     public AudioClip ultSlamSFX;            // 终结重击砸地音效（沉重的爆炸/砸地声）
+
+    [Header("终极大招特效")]
+    public GameObject[] ultSlashEffects; // 前 4 段的不同角度剑光
+    public GameObject ultLaunchEffect;   // 第 5 段的垂直升龙剑光！
+    public GameObject ultSlamEffect;     // 砸地爆发特效
+    public GameObject ultHitEffect;
+
 
     [Header("耐力消耗")]
     public float sprintStaminaCost = 25f;         // 奔跑每秒消耗
@@ -573,20 +582,20 @@ public class EldenRingMovement : MonoBehaviour
                 dirToTarget.y = 0;
                 if (dirToTarget != Vector3.zero)
                 {
-                    // 【修改】：大招期间锁定转向变慢，体现重量感
-                    float rotSpeed = (isAttacking || isLightAttacking || isUltimateCasting) ? rotationSpeed * 0.2f : rotationSpeed;
+                    // ✅ 1技能 (isCasting) 锁定转向变慢
+                    float rotSpeed = (isAttacking || isLightAttacking || isUltimateCasting || isCasting) ? rotationSpeed * 0.2f : rotationSpeed;
                     targetRotation = Quaternion.LookRotation(dirToTarget);
                     transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, rotSpeed * Time.deltaTime);
                 }
             }
-            // 【修改核心】：允许在大招期间 ( || isUltimateCasting ) 接收 WASD 输入并转向！
-            else if (hasMoveInput && targetMoveDirection.magnitude > 0.1f && (!isAttacking && !isLightAttacking || isUltimateCasting))
+            // ======= 自由视角的 WASD 转向 =======
+            else if (hasMoveInput && targetMoveDirection.magnitude > 0.1f && (!isAttacking && !isLightAttacking || isUltimateCasting || isCasting))
             {
-                targetRotation = Quaternion.LookRotation(targetMoveDirection);
-                // 【新增】：大招期间，转身速度变慢（0.4倍），体现重剑大招由于惯性难以转身的硬核手感
-                float currentRotSpeed = isUltimateCasting ? rotationSpeed * 0.4f : (isRunning ? rotationSpeed : rotationSpeed * 0.8f);
+                 targetRotation = Quaternion.LookRotation(targetMoveDirection);
+                // ✅ 1技能 (isCasting) 自由转向也变慢
+                float currentRotSpeed = (isUltimateCasting || isCasting) ? rotationSpeed * 0.4f : (isRunning ? rotationSpeed : rotationSpeed * 0.8f);
                 transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, currentRotSpeed * Time.deltaTime);
-            
+        
                 float angle = Vector3.SignedAngle(transform.forward, targetMoveDirection, Vector3.up);
                 currentTurnAngle = Mathf.Lerp(currentTurnAngle, Mathf.Clamp(angle / 90f, -1f, 1f), Time.deltaTime * 10f);
             }
@@ -1527,7 +1536,7 @@ public class EldenRingMovement : MonoBehaviour
                     hitPoint = hit.ClosestPoint(transform.position + Vector3.up * 1.5f);
                 }
 
-                SpawnHitEffect(hitPoint);
+                SpawnHitEffect(hitEffect, hitPoint, enemy.transform);
                 
                 if (isLightAttacking) PlayLightAttackHit();
                 else if (isAttacking || isRunningAttack) PlayAttackHit();
@@ -1689,11 +1698,25 @@ public class EldenRingMovement : MonoBehaviour
     }
 
     // 播放命中特效（在击中敌人时调用）
-    public void SpawnHitEffect(Vector3 hitPoint)
+    public void SpawnHitEffect(GameObject vfxPrefab, Vector3 hitPoint, Transform enemyTransform)
     {
-        if (hitEffect != null)
+        if (vfxPrefab != null)
         {
-            GameObject effect = Instantiate(hitEffect, hitPoint, Quaternion.identity);
+            // 生成指定的特效
+            GameObject effect = Instantiate(vfxPrefab, hitPoint, Quaternion.identity);
+            
+            // ✅ 【核心修复】：强行把它变成怪物的子物体！
+            // 这样怪物被击退、击飞时，伤口处的火花会死死粘在它身上跟着一起飞！
+            if (enemyTransform != null)
+            {
+                effect.transform.SetParent(enemyTransform, true);
+            }
+            
+            effect.SetActive(false);
+            effect.SetActive(true);
+            StartCoroutine(DelayedPlay(effect));
+
+            // 0.5秒后销毁，保持 Hierarchy 干净清爽
             Destroy(effect, 0.5f);
         }
     }
@@ -1773,65 +1796,63 @@ public class EldenRingMovement : MonoBehaviour
         return weaponPoint.rotation;
     }
 
+    // ==========================================
+    // 纯净版特效生成（专为 Wrapper 套娃预制体打造）
+    // ==========================================
+    public void SpawnPureEffect(GameObject vfxPrefab, Vector3 spawnPos)
+    {
+        if (vfxPrefab == null) return;
+        
+        // 直接使用玩家当前的朝向 (transform.rotation)！
+        // 因为预制体内部已经调好了斜挑的角度，所以生出来绝对完美匹配！
+        GameObject effect = Instantiate(vfxPrefab, spawnPos, transform.rotation);
+        
+        effect.SetActive(false);
+        effect.SetActive(true);
+        StartCoroutine(DelayedPlay(effect));
+
+        // 自动销毁防内存泄漏
+        Destroy(effect, 1.5f);
+    }
+
     IEnumerator DelayedPlay(GameObject effect)
     {
         yield return null; // 等待一帧
+        float maxDuration = 1f; // 保底寿命
     
-        // 🎯 获取所有粒子系统（包括隐藏的子物体）
+        // 🎯 1. 全面重启：所有粒子系统
         ParticleSystem[] allParticleSystems = effect.GetComponentsInChildren<ParticleSystem>(true);
-    
-        // 记录每个粒子系统的原始设置
-        Dictionary<ParticleSystem, float> originalDurations = new Dictionary<ParticleSystem, float>();
-    
         foreach (var ps in allParticleSystems)
         {
-            // 保存原始持续时间
-            originalDurations[ps] = ps.main.duration;
-        
-            // 停止并清除所有现有粒子
+            if (ps.main.duration > maxDuration) maxDuration = ps.main.duration;
+            
             ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-        
-            // 强制重置粒子系统状态
             ps.Clear();
-        
-            // 如果有自定义的模拟时间，可以设置
-            // ps.Simulate(0f, true, true);
-        
-            // 开始播放
             ps.Play();
-        
         }
     
-        // 🎯 处理 Animator 组件（如果有）
-        Animator animator = effect.GetComponent<Animator>();
-        if (animator != null)
+        // 🎯 2. 全面重启：藏在任何角落的新版 Animator 动画机
+        // 🌟【核心修复】：加上 InChildren，把那个控制半透明圆环的动画机挖出来！
+        Animator[] allAnimators = effect.GetComponentsInChildren<Animator>(true);
+        foreach (var animator in allAnimators)
         {
-            animator.Rebind();  // 重置动画状态
+            animator.Rebind();
             animator.Update(0f);
-        
-            // 尝试播放默认动画
-            if (animator.HasState(0, Animator.StringToHash("Play")))
-            {
-                animator.Play("Play", 0, 0);
-            }
-            else if (animator.HasState(0, Animator.StringToHash("Default")))
-            {
-                animator.Play("Default", 0, 0);
-            }
-        
-            //Debug.Log("播放 Animator");
+            
+            // 🌟【核心修复】：不管美术把这套动画起名叫 "Play" 还是 "Take 001"，直接抓取默认状态从头播放！
+            AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+            animator.Play(stateInfo.fullPathHash, -1, 0f);
         }
     
-        // 🎯 处理 Animation 组件（如果有）
-        Animation animation = effect.GetComponent<Animation>();
-        if (animation != null)
+        // 🎯 3. 全面重启：藏在任何角落的旧版 Animation 动画组件
+        Animation[] allAnimations = effect.GetComponentsInChildren<Animation>(true);
+        foreach (var animation in allAnimations)
         {
             animation.Stop();
             animation.Play();
-            //Debug.Log("播放 Animation");
         }
     
-        // 🎯 根据攻击类型调整大小
+        // 🎯 4. 根据攻击类型动态调整大小
         if (isLightAttacking)
         {
             effect.transform.localScale = Vector3.one * 0.8f;
@@ -1841,18 +1862,7 @@ public class EldenRingMovement : MonoBehaviour
             effect.transform.localScale = Vector3.one * 1.2f;
         }
     
-        // 🎯 获取最长粒子系统的持续时间
-        float maxDuration = 0f;
-        foreach (var duration in originalDurations.Values)
-        {
-            if (duration > maxDuration)
-                maxDuration = duration;
-        }
-    
-        // 如果没有粒子系统，默认1秒
-        if (maxDuration <= 0) maxDuration = 1f;
-    
-        // 在所有粒子播放完成后销毁
+        // 统一销毁，绝不留内存垃圾
         Destroy(effect, maxDuration);
     
     }
@@ -1891,52 +1901,32 @@ public class EldenRingMovement : MonoBehaviour
 
     IEnumerator CastRoutine()
     {
-        if (anim == null)
+         // 等待两帧，确保动画机切入 Cast 状态
+        yield return new WaitForEndOfFrame();
+        yield return new WaitForEndOfFrame();
+
+        float actualAnimLength = castDuration; // 默认使用面板填写的 1 技能时长
+
+        if (anim != null)
         {
-            yield return new WaitForSeconds(castDuration);
-            OnCastFinished();
-            yield break;
+            AnimatorStateInfo stateInfo = anim.IsInTransition(0) ? anim.GetNextAnimatorStateInfo(0) : anim.GetCurrentAnimatorStateInfo(0);
+            if (stateInfo.length > 0.1f) 
+            {
+                actualAnimLength = stateInfo.length;
+            }
         }
 
-        // 1. 获取触发施法前，小人的初始动画状态（比如正在走或待机）
-        int initialState = anim.GetCurrentAnimatorStateInfo(0).shortNameHash;
-
-        // 2. 动态等待：死死盯住动画机，直到它真正开始响应 Trigger 并进入过渡，或者切入新状态
-        float timeout = 0f;
-        while (anim.GetCurrentAnimatorStateInfo(0).shortNameHash == initialState && !anim.IsInTransition(0))
-        {
-            timeout += Time.deltaTime;
-            if (timeout > 0.5f) break; // 最多等0.5秒防卡死兜底
-            yield return null;
-        }
-
-        // 3. 此时 100% 确定已经开始施法（或正在朝施法过渡），抓取这套动作的真实长度
-        AnimatorStateInfo stateInfo = anim.IsInTransition(0) ? anim.GetNextAnimatorStateInfo(0) : anim.GetCurrentAnimatorStateInfo(0);
-        float actualAnimLength = stateInfo.length;
-
-        // 防御性兜底：如果没抓到有效长度，用面板设置的默认时长
-        if (actualAnimLength <= 0.1f) 
-        {
-            actualAnimLength = castDuration;
-        }
-        else
-        {
-            castDuration = actualAnimLength; // 将真实长度同步到面板方便观察
-        }
-
-        // 4. 精准等待整个施法动画播放完毕
         float timer = 0f;
-        while (timer < actualAnimLength * 0.95f) // 0.95f 预留一点点时间给动画平滑过渡回Idle
+        // ✅【核心修复 2：绝对死锁！】
+        // 只要时间没到，代码死死锁住你的霸体状态！不准任何人修改它！
+        while (timer < actualAnimLength * 0.95f) 
         {
-            timer += Time.deltaTime;
-            
-            // 如果在此期间玩家被击杀等强制打断了霸体，直接终止协程
             if (isDead) yield break; 
-            
+            timer += Time.deltaTime;
             yield return null;
         }
 
-        // 5. 彻底结束霸体与定身
+        // 动画彻底播完后，才允许收招
         OnCastFinished();
     }
 
@@ -2216,11 +2206,12 @@ public class EldenRingMovement : MonoBehaviour
         }
         
         // 强制结束当前攻击
-        if (isAttacking || isLightAttacking || isRunningAttack || isUltimateCasting)
+        if (isAttacking || isLightAttacking || isRunningAttack || isUltimateCasting || isCasting)
         {
             isAttacking = false;
             isLightAttacking = false;
             isRunningAttack = false;
+            isCasting = false;
             isUltimateCasting = false; // 👈【新增】被挨打打断时解锁大招
             
             // 【核心修复】：必须彻底清空所有连击预输入缓存，防止复苏后自动乱挥刀
@@ -2422,10 +2413,27 @@ public class EldenRingMovement : MonoBehaviour
 
     // 动画事件：前四段上挑伤害判定
     // （在 Animator 里打 4 个事件点调用这个方法）
-    public void Event_UltUpwardSlashHit()
+    public void Event_UltUpwardSlashHit(int index)
     {
-        Debug.Log("大招上挑斩击判定触发");
-        
+        // 核心防抖锁】：如果距离上次触发还不到 0.1 秒，说明是 Unity 引擎在抽风双重调用，直接无视它
+        if (Time.unscaledTime - lastEventTime < 0.1f) return;
+        lastEventTime = Time.unscaledTime; // 记录本次触发时间
+
+        Debug.Log($"大招第 {index + 1} 段斩击判定触发");
+
+        // 精准调用：根据传进来的数字，播放对应角度的特效包装盒
+        if (ultSlashEffects != null && index >= 0 && index < ultSlashEffects.Length)
+        {
+            GameObject currentSlashVFX = ultSlashEffects[index];
+            if (currentSlashVFX != null)
+            {
+                // 距离身前 0.5米，高度 1.0米
+                Vector3 vfxPos = transform.position + transform.forward * 0.5f + Vector3.up * 1.0f;
+                SpawnPureEffect(currentSlashVFX, vfxPos);
+            }
+        }
+
+        // --- 下面是伤害与命中火花（循环内） ---
         float totalDamage = ultimateSlashBaseDamage + (attackPowerBonus * castDamageScalingMultiplier * 0.5f);
         int finalSlashDamage = Mathf.RoundToInt(totalDamage * Random.Range(0.9f, 1.1f));
 
@@ -2440,16 +2448,20 @@ public class EldenRingMovement : MonoBehaviour
             if (enemy != null && !slashedEnemies.Contains(enemy))
             {
                 slashedEnemies.Add(enemy); 
-                
                 attackDir = (enemy.transform.position - transform.position).normalized;
                 attackDir.y = 0;
 
-                // 确保这里传的是已经赋值的 attackDir
                 enemy.TakeDamageWithDirection(attackDir, castKnockbackForce * 0.3f, finalSlashDamage, 2);
                 
                 StartCoroutine(HitStop()); 
-                Vector3 hitPoint = hit.ClosestPoint(transform.position + Vector3.up * 1.5f);
-                SpawnHitEffect(hitPoint);
+                //放弃不靠谱的 ClosestPoint，直接计算真实胸口位置
+                Vector3 chestPos = enemy.transform.position + Vector3.up * 1.2f;
+                Vector3 sparkPos = chestPos + (transform.position - enemy.transform.position).normalized * 0.3f;
+                //利用你之前在怪物身上配好的 lockOnPoint（胸口锁定点/骨骼），把火花绑在肉体上而不是脚底板
+                Transform attachTarget = enemy.lockOnPoint != null ? enemy.lockOnPoint : enemy.transform;
+                
+                GameObject vfxToUse = ultHitEffect != null ? ultHitEffect : hitEffect;
+                SpawnHitEffect(vfxToUse, sparkPos, attachTarget);
                 PlayAttackHit(); 
             }
         }
@@ -2458,7 +2470,19 @@ public class EldenRingMovement : MonoBehaviour
     // 动画事件：第五段专属升龙击飞！
     public void Event_UltLaunchHit()
     {
+        if (Time.unscaledTime - lastEventTime < 0.1f) return;
+        lastEventTime = Time.unscaledTime;
+
         Debug.Log("第五段击飞判定触发");
+
+        // ✅ 【核心修复】：垂直升龙剑光独立生成！
+        if (ultLaunchEffect != null)
+        {
+            Vector3 vfxPos = transform.position + transform.forward * 1.0f + Vector3.up * 1.2f;
+            SpawnPureEffect(ultLaunchEffect, vfxPos);
+        }
+
+        // --- 下面是伤害与命中火花 ---
         float totalDamage = ultimateSlashBaseDamage + (attackPowerBonus * castDamageScalingMultiplier * 0.5f);
         int finalSlashDamage = Mathf.RoundToInt(totalDamage * Random.Range(0.9f, 1.1f));
 
@@ -2471,19 +2495,19 @@ public class EldenRingMovement : MonoBehaviour
             if (enemy != null && !slashedEnemies.Contains(enemy))
             {
                 slashedEnemies.Add(enemy); 
-                
-                Vector3 enemyPos = enemy.transform.position;
-                Vector3 playerPos = transform.position;
-                enemyPos.y = 0;
-                playerPos.y = 0;
-                Vector3 knockbackDir = (enemyPos - playerPos).normalized;
+                Vector3 knockbackDir = (enemy.transform.position - transform.position).normalized;
+                knockbackDir.y = 0;
 
-                // 🌟 【核心】：调用怪物的专属滞空击飞方法，浮空力给足 (比如 8f)
                 enemy.TakeLaunchDamage(knockbackDir, castKnockbackForce * 0.5f, finalSlashDamage, ultimateLaunchForce, 2);
                 
-                StartCoroutine(HitStop()); 
-                Vector3 hitPoint = hit.ClosestPoint(transform.position + Vector3.up * 1.5f);
-                SpawnHitEffect(hitPoint);
+                StartCoroutine(HitStop());
+                Vector3 chestPos = enemy.transform.position + Vector3.up * 1.2f;
+                Vector3 sparkPos = chestPos + (transform.position - enemy.transform.position).normalized * 0.3f; 
+                Transform attachTarget = enemy.lockOnPoint != null ? enemy.lockOnPoint : enemy.transform;
+
+                // 大招必须用 skillHitEffect（如果没有就拿 hitEffect 兜底）
+                GameObject vfxToUse = ultHitEffect != null ? ultHitEffect : hitEffect;
+                SpawnHitEffect(vfxToUse, sparkPos, attachTarget);
                 PlayAttackHit(); 
             }
         }
@@ -2492,12 +2516,25 @@ public class EldenRingMovement : MonoBehaviour
     // 动画事件 2：大剑砸在地上的瞬间结算伤害！
     public void Event_UltimateHit()
     {
+        if (Time.unscaledTime - lastEventTime < 0.1f) return;
+        lastEventTime = Time.unscaledTime;
+
         Debug.Log("大招伤害判定触发");
 
         //播放砸地终结音效
         if (ultSlamSFX != null && audioSource != null)
         {
             audioSource.PlayOneShot(ultSlamSFX, 1.2f);
+        }
+
+        if (ultSlamEffect != null)
+        {
+            // 在玩家身前 1 米处生成
+            Vector3 slamPos = transform.position + transform.forward * 1.0f;
+            slamPos.y += 0.1f; // 稍微抬高一点点，防止贴图被地板吞没
+            
+            // 复用我们的纯净版特效生成器
+            SpawnPureEffect(ultSlamEffect, slamPos);
         }
         
         // 计算基础大招伤害（带上属性加成）
@@ -2521,7 +2558,7 @@ public class EldenRingMovement : MonoBehaviour
             {
                 damagedEnemies.Add(enemy); 
                 
-                // 🌟【先抹平高度差，再计算方向！】保证 100% 水平击退力度！
+                // 【先抹平高度差，再计算方向！】保证 100% 水平击退力度！
                 Vector3 enemyPos = enemy.transform.position;
                 Vector3 playerPos = transform.position;
                 enemyPos.y = 0;
@@ -2533,6 +2570,15 @@ public class EldenRingMovement : MonoBehaviour
                 int displayType = qteSuccess ? 1 : 2; 
                 // 传入极大的击退力 (1.5倍)，极狠的下坠力 (SlamForce)，并给予长达 2.5 秒的倒地硬直 (最后一个参数)！
                 enemy.TakeKnockbackWithUp(knockbackDir, castKnockbackForce * 1.5f, finalDamage, ultimateSlamForce, displayType, 2.5f);
+
+                //加上最后的卡肉顿帧，以及 QTE 砸中的专属受击火花！
+                StartCoroutine(HitStop()); 
+                Vector3 chestPos = enemy.transform.position + Vector3.up * 1.2f;
+                Vector3 sparkPos = chestPos + (transform.position - enemy.transform.position).normalized * 0.3f; 
+                Transform attachTarget = enemy.lockOnPoint != null ? enemy.lockOnPoint : enemy.transform;
+
+                GameObject vfxToUse = ultHitEffect != null ? ultHitEffect : hitEffect;
+                SpawnHitEffect(vfxToUse, sparkPos, attachTarget);
             }
         }
     }

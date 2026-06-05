@@ -573,7 +573,7 @@ ModelImporter:
         data: 
         objectReferenceParameter: {instanceID: 0}
         floatParameter: 0
-        intParameter: 0
+        intParameter: 1
         messageOptions: 0
       - time: 0.33035713
         functionName: Event_UltUpwardSlashSound
@@ -587,7 +587,7 @@ ModelImporter:
         data: 
         objectReferenceParameter: {instanceID: 0}
         floatParameter: 0
-        intParameter: 0
+        intParameter: 2
         messageOptions: 0
       - time: 0.42816558
         functionName: Event_UltUpwardSlashSound
@@ -601,10 +601,17 @@ ModelImporter:
         data: 
         objectReferenceParameter: {instanceID: 0}
         floatParameter: 0
-        intParameter: 0
+        intParameter: 3
         messageOptions: 0
       - time: 0.553328
         functionName: Event_UltUpwardSlashSound
+        data: 
+        objectReferenceParameter: {instanceID: 0}
+        floatParameter: 0
+        intParameter: 4
+        messageOptions: 0
+      - time: 0.5890347
+        functionName: Event_UltLaunchHit
         data: 
         objectReferenceParameter: {instanceID: 0}
         floatParameter: 0
@@ -626,13 +633,6 @@ ModelImporter:
         messageOptions: 0
       - time: 0.90131176
         functionName: OnUltimateFinished
-        data: 
-        objectReferenceParameter: {instanceID: 0}
-        floatParameter: 0
-        intParameter: 0
-        messageOptions: 0
-      - time: 0.5890347
-        functionName: Event_UltLaunchHit
         data: 
         objectReferenceParameter: {instanceID: 0}
         floatParameter: 0

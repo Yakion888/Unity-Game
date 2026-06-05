@@ -14346,14 +14346,14 @@ MonoBehaviour:
   staminaRegenRate: 15
   staminaRegenDelay: 1
   castDamage: 100
-  castDuration: 1
+  castDuration: 3
   castDamageScalingMultiplier: 2.5
   castKnockbackForce: 15
   castKnockupForce: 8
   castRadius: 3
-  skillWavePushForce: 8
+  skillWavePushForce: 6
   skillWaveUpForce: 2
-  skillWaveLifetime: 2
+  skillWaveLifetime: 1.5
   ultimateSlashBaseDamage: 30
   ultimateBaseDamage: 100
   ultimateQTEBonus: 4
@@ -14369,6 +14369,8 @@ MonoBehaviour:
   ultSlowMotionSFX: {fileID: 8300000, guid: 5b4096edde44cec4ba24c9aa51b67bbf, type: 3}
   ultQTESuccessSFX: {fileID: 8300000, guid: 80e563a49c084784cad626c550d2cc2b, type: 3}
   ultSlamSFX: {fileID: 8300000, guid: b207b8f8305d7b14885d48685cd353bc, type: 3}
+  ultSlashEffect: {fileID: 5968681342771426303, guid: e2a54f8af883c5641b69963e60e2d019, type: 3}
+  ultLaunchEffect: {fileID: 1588352727990309098, guid: 84c9a0bc8c9bb774abda3c6db66ef4d8, type: 3}
   sprintStaminaCost: 15
   runningAttackStaminaCost: 75
   heavyAttackStaminaCost:
@@ -22399,6 +22401,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: "\u65E5\u5973\u4E13\u6B66"
       objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 2e8263774ac93af4bb28281d6f5847c0, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -26249,7 +26255,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &919132148085711900
 MonoBehaviour:
   m_ObjectHideFlags: 0
