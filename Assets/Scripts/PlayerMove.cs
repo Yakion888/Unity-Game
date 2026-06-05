@@ -193,6 +193,7 @@ public class EldenRingMovement : MonoBehaviour
     [Header("终极大招特效")]
     public GameObject[] ultSlashEffects; // 前 4 段的不同角度剑光
     public GameObject ultLaunchEffect;   // 第 5 段的垂直升龙剑光！
+    public GameObject ultFinalSlashEffect; //QTE 终结下劈的专属剑光
     public GameObject ultSlamEffect;     // 砸地爆发特效
     public GameObject ultHitEffect;
 
@@ -562,19 +563,18 @@ public class EldenRingMovement : MonoBehaviour
         // ========== 速度控制 ==========
         float targetSpeed = 0f;
         // 【新增】：大招期间不接受玩家的速度加成
-        if (hasMoveInput && !isAttacking && !isLightAttacking && !isUltimateCasting)
+        if (hasMoveInput && !isAttacking && !isLightAttacking && !isUltimateCasting && !isCasting)
         {
             targetSpeed = runInput ? runSpeed : walkSpeed;
         }
         
         float accel = hasMoveInput ? acceleration : deceleration;
         currentSpeed = Mathf.MoveTowards(currentSpeed, targetSpeed, accel * Time.deltaTime);
-         // 【新增】：彻底锁死大招期间的脚本速度
-        if (isUltimateCasting) currentSpeed = 0f;
+        // 【新增】：彻底锁死大招期间的脚本速度
+        if (isUltimateCasting || isCasting) currentSpeed = 0f;
         
         // ========== 旋转控制 ==========
-        if(!isCasting)
-        {
+        
             // ======= 锁定时的强制朝向 =======
             if (isLockedOn && lockedTarget != null)
             {
@@ -605,7 +605,7 @@ public class EldenRingMovement : MonoBehaviour
                 transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, idleRotationSpeed * Time.deltaTime);
                 currentTurnAngle = Mathf.Lerp(currentTurnAngle, 0f, Time.deltaTime * 5f);
             }
-        }
+        
 
         
         // ========== 垂直移动、跳跃与重力（重构统合处理） ==========
@@ -1898,24 +1898,37 @@ public class EldenRingMovement : MonoBehaviour
 
     IEnumerator CastRoutine()
     {
-         // 等待两帧，确保动画机切入 Cast 状态
-        yield return new WaitForEndOfFrame();
-        yield return new WaitForEndOfFrame();
-
-        float actualAnimLength = castDuration; // 默认使用面板填写的 1 技能时长
-
-        if (anim != null)
+        if (anim == null)
         {
-            AnimatorStateInfo stateInfo = anim.IsInTransition(0) ? anim.GetNextAnimatorStateInfo(0) : anim.GetCurrentAnimatorStateInfo(0);
-            if (stateInfo.length > 0.1f) 
-            {
-                actualAnimLength = stateInfo.length;
-            }
+            yield return new WaitForSeconds(castDuration);
+            OnCastFinished();
+            yield break;
         }
 
+        // 1. 获取触发施法前，小人的初始动画状态
+        int initialState = anim.GetCurrentAnimatorStateInfo(0).shortNameHash;
+
+        // 2. 动态等待：死死盯住动画机，直到它真正开始响应 Trigger 并进入技能状态
+        float timeout = 0f;
+        while (anim.GetCurrentAnimatorStateInfo(0).shortNameHash == initialState && !anim.IsInTransition(0))
+        {
+            timeout += Time.deltaTime;
+            if (timeout > 0.5f) break; // 防卡死兜底
+            yield return null;
+        }
+
+        // 3. 此时 100% 确定已经开始施法，抓取这套重劈动作的【真实长度】
+        AnimatorStateInfo stateInfo = anim.IsInTransition(0) ? anim.GetNextAnimatorStateInfo(0) : anim.GetCurrentAnimatorStateInfo(0);
+        float actualAnimLength = stateInfo.length;
+
+        if (actualAnimLength <= 0.1f) 
+        {
+            actualAnimLength = castDuration;
+        }
+
+        // 4. 精准等待整个施法动画播放完毕
         float timer = 0f;
-        // ✅【核心修复 2：绝对死锁！】
-        // 只要时间没到，代码死死锁住你的霸体状态！不准任何人修改它！
+        // ✅ 只要动画没播完，绝对不解除霸体，不归还移动权限！
         while (timer < actualAnimLength * 0.95f) 
         {
             if (isDead) yield break; 
@@ -1923,7 +1936,7 @@ public class EldenRingMovement : MonoBehaviour
             yield return null;
         }
 
-        // 动画彻底播完后，才允许收招
+        // 5. 彻底结束霸体与定身
         OnCastFinished();
     }
 
@@ -2522,6 +2535,14 @@ public class EldenRingMovement : MonoBehaviour
         if (ultSlamSFX != null && audioSource != null)
         {
             audioSource.PlayOneShot(ultSlamSFX, 1.2f);
+        }
+
+        //生成向下重劈的剑光
+        if (ultFinalSlashEffect != null)
+        {
+            // 位置在玩家身前 1 米，高度 1.2 米（和之前的上挑保持一致，显得连贯）
+            Vector3 slashPos = transform.position + transform.forward * 1.0f + Vector3.up * 1.2f;
+            SpawnPureEffect(ultFinalSlashEffect, slashPos);
         }
 
         if (ultSlamEffect != null)

@@ -305,7 +305,7 @@ MonoBehaviour:
   currentState: 0
   player: {fileID: 0}
   damageTextPrefab: {fileID: 2635084426336851924, guid: 07d9af82f200d1c4fbc9731a1544e7bc, type: 3}
-  lockOnPoint: {fileID: 1336529861}
+  lockOnPoint: {fileID: 48917352}
   chaseDistance: 20
   attackDistance: 3
   walkSpeed: 1
@@ -350,7 +350,7 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 10
+  m_Radius: 5
   m_Center: {x: 0, y: 1, z: 0}
 --- !u!1001 &11817277
 PrefabInstance:
@@ -928,6 +928,11 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1375500788}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!4 &48917352 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 366175167995203695, guid: d184badf2a99a734aab0d34aab39560d, type: 3}
+  m_PrefabInstance: {fileID: 984055574}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &49768316
 GameObject:
   m_ObjectHideFlags: 0
@@ -14871,8 +14876,15 @@ MonoBehaviour:
   ultSlowMotionSFX: {fileID: 8300000, guid: 5b4096edde44cec4ba24c9aa51b67bbf, type: 3}
   ultQTESuccessSFX: {fileID: 8300000, guid: 80e563a49c084784cad626c550d2cc2b, type: 3}
   ultSlamSFX: {fileID: 8300000, guid: b207b8f8305d7b14885d48685cd353bc, type: 3}
-  ultSlashEffect: {fileID: 5968681342771426303, guid: e2a54f8af883c5641b69963e60e2d019, type: 3}
-  ultLaunchEffect: {fileID: 1588352727990309098, guid: 84c9a0bc8c9bb774abda3c6db66ef4d8, type: 3}
+  ultSlashEffects:
+  - {fileID: 5968681342771426303, guid: 5e50e7789d75fbd489a2605fa1aadac0, type: 3}
+  - {fileID: 3545384974965476873, guid: bdef2d118476fb1418e97552de259e43, type: 3}
+  - {fileID: 5968681342771426303, guid: 5e50e7789d75fbd489a2605fa1aadac0, type: 3}
+  - {fileID: 5968681342771426303, guid: 5e50e7789d75fbd489a2605fa1aadac0, type: 3}
+  ultLaunchEffect: {fileID: 5968681342771426303, guid: 5e50e7789d75fbd489a2605fa1aadac0, type: 3}
+  ultFinalSlashEffect: {fileID: 5968681342771426303, guid: 2160cc5d7b7168944a8370ab25965305, type: 3}
+  ultSlamEffect: {fileID: 1588352727990309098, guid: 84c9a0bc8c9bb774abda3c6db66ef4d8, type: 3}
+  ultHitEffect: {fileID: 5316302592732368157, guid: ec0fd209033e1054fb8a06b041d4e4d3, type: 3}
   sprintStaminaCost: 15
   runningAttackStaminaCost: 75
   heavyAttackStaminaCost:
