@@ -1049,7 +1049,8 @@ public class EldenRingMovement : MonoBehaviour
         foreach (var col in cols)
         {
             BasicEnemyTest enemy = col.GetComponent<BasicEnemyTest>();
-            if (enemy != null && enemy.currentState != BasicEnemyTest.EnemyState.Hit) // 可根据需求放宽条件
+
+            if (enemy != null && !enemy.startHidden && !enemy.isDead && enemy.currentState != BasicEnemyTest.EnemyState.Hit) // 可根据需求放宽条件
             {
                 Vector3 dirToEnemy = (col.transform.position - transform.position).normalized;
                 // 优先锁定屏幕视野前方的敌人
@@ -1069,7 +1070,7 @@ public class EldenRingMovement : MonoBehaviour
             lockedTarget = bestTarget;
             isLockedOn = true;
             Debug.Log("锁定目标: " + bestTarget.parent?.name);
-            // ======= 新加：显示UI =======
+            // 显示UI
             if (lockOnUI != null) lockOnUI.gameObject.SetActive(true);
         }
     }
