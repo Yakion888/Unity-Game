@@ -17,8 +17,12 @@ public class BussesMan : MonoBehaviour
     public int goldReward = 100;             // 任务金币奖励
 
     private bool hasTaskInProgress = false;   // 是否已接受任务且未完成
-    private string[] currentDialogLines;   // 当前使用的对话数组
-    private bool isTaskCompletedForDialog;
+    private string[] currentDialogLines;      // 当前使用的对话数组
+    private bool isTaskCompletedForDialog;    // 任务是否完成标志
+
+    private bool canInteract = true;          // 是否可交互（领取奖励后变为false）
+    public GameObject temporaryRestPoint;     // 场景中的临时休息点（初始隐藏）
+    private bool hasLeft = false;             // 商人是否离开的标志
 
     [Header("对话内容")]
     [TextArea] public string[] dialogLines;
@@ -56,7 +60,7 @@ public class BussesMan : MonoBehaviour
             Debug.Log("任务完成，商人可以再次发布任务");
         }
 
-        if (isPlayerInRange && !isDialogOpen && !hasTaskInProgress && Input.GetKeyDown(interactKey))
+        if (isPlayerInRange && !isDialogOpen && !hasTaskInProgress && canInteract && Input.GetKeyDown(interactKey))
         {
             StartDialog();
         }
@@ -179,11 +183,7 @@ public class BussesMan : MonoBehaviour
         talkPromptUI?.SetActive(false);
         isPlayerInRange = false;   // 强制玩家必须远离才能再次交互
 
-        // 重置任务管理器，以便以后可以再次接取任务（如果需要）
-        if (taskManager != null)
-            taskManager.ResetTask();
-
-        Debug.Log("任务奖励已发放，商人重置");
+        canInteract = false;
     }
 
     public void AcceptQuest()
@@ -228,6 +228,27 @@ public class BussesMan : MonoBehaviour
         // 交互提示的显示/隐藏完全由触发器进出控制
     }
 
+    public void MerchantLeave()
+    {
+        if (hasLeft) return;
+        hasLeft = true;
+
+        // 播报消息
+        if (ActionLogManager.Instance != null)
+            ActionLogManager.Instance.ShowMessage("商人已离开，并为你建设了一个临时休息处");
+        else
+            Debug.Log("商人已离开，并为你建设了一个临时休息处");
+
+        // 显示临时休息点
+        if (temporaryRestPoint != null)
+            temporaryRestPoint.SetActive(true);
+        else
+            Debug.LogWarning("未指定临时休息点对象，无法显示");
+
+        // 商人消失
+        gameObject.SetActive(false);
+    }
+
     private void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Player"))
@@ -235,10 +256,11 @@ public class BussesMan : MonoBehaviour
             isPlayerInRange = true;
             if (!isDialogOpen)
             {
-                if (hasTaskInProgress)
-                    talkPromptUI?.SetActive(false);   // 不显示交互提示，或者改为显示“任务进行中”的提示
-                else
+                // 只有可以交互且没有进行中的任务时，才显示交互提示
+                if (canInteract && !hasTaskInProgress)
                     talkPromptUI?.SetActive(true);
+                else
+                    talkPromptUI?.SetActive(false);
             }
         }
     }
