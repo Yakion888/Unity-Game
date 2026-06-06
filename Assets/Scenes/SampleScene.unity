@@ -26538,6 +26538,7 @@ MonoBehaviour:
   acceptButton: {fileID: 39581278}
   refuseButton: {fileID: 1239568647}
   taskManager: {fileID: 2107066711}
+  xpReward: 250
   goldReward: 100
   dialogLines:
   - "\"\u4F60\u597D\uFF0C\u65C5\u884C\u8005\uFF0C\u53EF\u4EE5\u8BF7\u4F60\u5E2E\u6211\u4E00\u4E2A\u5FD9\u5417\uFF1F\""
@@ -26547,6 +26548,7 @@ MonoBehaviour:
   completionDialogLines:
   - "\u201C\u5341\u5206\u611F\u8C22\u4F60\u7684\u5E2E\u52A9\uFF0C\u65C5\u884C\u8005\uFF01\u201D"
   - "\u201C\u5BF9\u4E86\uFF0C\u8FD9\u662F\u4F60\u5E2E\u52A9\u6211\u7684\u62A5\u916C\u3002\u201D"
+  player: {fileID: 0}
 --- !u!135 &2107066709
 SphereCollider:
   m_ObjectHideFlags: 0

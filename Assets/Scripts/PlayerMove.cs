@@ -3289,6 +3289,27 @@ public class EldenRingMovement : MonoBehaviour
         }
     }
 
+    // 领取任务奖励获取经验
+    public void RewardXP(int amount)
+    {
+        currentXP += amount;
+        // 把 Debug.Log 改为 UI 播报：
+        if (ActionLogManager.Instance != null)
+        {
+            ActionLogManager.Instance.ShowMessage($"领取奖励，获得 {amount} 卢恩");
+        }
+    }
+
+    // 领取任务奖励获取金币
+    public void RewardGold(int amount)
+    {
+        currentGold += amount;
+        if (ActionLogManager.Instance != null)
+        {
+            ActionLogManager.Instance.ShowMessage($"领取奖励，获得 {amount} 金币");
+        }
+    }
+
     // 计算升到下一级需要多少经验（典型的魂系递增公式）
     public int GetXPRequirementForNextLevel()
     {

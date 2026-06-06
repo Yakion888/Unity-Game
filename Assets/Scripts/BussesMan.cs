@@ -114,7 +114,6 @@ public class BussesMan : MonoBehaviour
 
         isDialogOpen = true;
         currentLine = 0;
-        talkPromptUI?.SetActive(false);
         dialogPanel?.SetActive(true);
         UpdateDialogText();
         if (anim != null) anim.SetInteger("state", 1);
@@ -140,6 +139,7 @@ public class BussesMan : MonoBehaviour
         // 如果是原任务发布对话的最后一句，显示接受/拒绝按钮
         if (!isTaskCompletedForDialog && currentLine == currentDialogLines.Length - 1)
         {
+            talkPromptUI?.SetActive(false);
             acceptButton?.SetActive(true);
             refuseButton?.SetActive(true);
         }
@@ -153,8 +153,8 @@ public class BussesMan : MonoBehaviour
             EldenRingMovement playerMovement = player.GetComponent<EldenRingMovement>();
             if (playerMovement != null)
             {
-                playerMovement.AddXP(xpReward);
-                playerMovement.AddGold(goldReward);
+                playerMovement.RewardXP(xpReward);
+                playerMovement.RewardGold(goldReward);
                 Debug.Log($"发放奖励：经验 +{xpReward}，金币 +{goldReward}");
             }
             else
