@@ -674,10 +674,16 @@ public class BasicEnemyTest : MonoBehaviour
             EldenRingMovement playerScript = hit.GetComponent<EldenRingMovement>();
             if (playerScript != null)
             {
+                //计算出怪物推向玩家的纯水平物理方向
+                Vector3 knockbackDir = (playerScript.transform.position - transform.position).normalized;
+                knockbackDir.y = 0;
+                // 假设怪物普攻击退力为 8f
+                float enemyPushForce = 8f;
+
                 if (playerScript.isBlocking)
-                    playerScript.TakeBlockDamage(attackDamage);
+                    playerScript.TakeBlockDamage(attackDamage, knockbackDir, enemyPushForce * 0.5f); // 玩家格挡，退一点点
                 else
-                    playerScript.TakeDamage(attackDamage);
+                    playerScript.TakeDamage(attackDamage, knockbackDir, enemyPushForce); // 玩家没防住，被狠狠击退
                 Debug.Log("敌人造成伤害（球形检测）");
                 break;
             }

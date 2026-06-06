@@ -54,6 +54,7 @@ public class EldenRingMovement : MonoBehaviour
     
     [Header("战斗设置")]
     public float hitStopDuration = 0.05f;  // 命中停顿时间
+    private float lastEventTime = 0f;    //记录上一次触发动画事件的真实时间，用于防抖
 
     [Header("攻击设置")]
     public float comboInputWindow = 0.3f;
@@ -84,7 +85,7 @@ public class EldenRingMovement : MonoBehaviour
     public Slider healthSlider;
     public Slider staminaSlider;
     public Slider rageSlider;
-    // 👇 【新增】UI数值文本引用
+    // 【新增】UI数值文本引用
     public TMPro.TextMeshProUGUI healthText;
     public TMPro.TextMeshProUGUI staminaText;
     public TMPro.TextMeshProUGUI rageText;
@@ -180,7 +181,6 @@ public class EldenRingMovement : MonoBehaviour
     private bool isWaitingForQTE = false;     // 是否正处于子弹时间等待按键
     private bool qteSuccess = false;          // QTE是否按成功了
 
-    private float lastEventTime = 0f;       // 记录上一次触发动画事件的真实时间，用于防抖
 
 
     [Header("终极大招音效 (QTE与连段)")]
@@ -280,6 +280,7 @@ public class EldenRingMovement : MonoBehaviour
     // 受击相关
     private bool isHit;
     private float hitRecoveryTime;
+    private Vector3 impact;
     
     // 动画相关
     private Animator anim;
@@ -673,10 +674,11 @@ public class EldenRingMovement : MonoBehaviour
             {
                 moveInput = Vector2.zero;
                 isRunning = false;
-                currentSpeed = 0f; 
+                currentSpeed = 0f;
+                horizontalVelocity = Vector3.zero; 
                 UpdateAnimation(false);
             }
-             // 【新增】：大招期间，脚本强制不提供任何水平位移，全权交给动画自身的 Root Motion
+             // 大招期间，脚本强制不提供任何水平位移，全权交给动画自身的 Root Motion
             else if (isUltimateCasting)
             {
                 horizontalVelocity = Vector3.zero;
@@ -685,6 +687,14 @@ public class EldenRingMovement : MonoBehaviour
             {
                 horizontalVelocity = targetMoveDirection * currentSpeed;
                 lastSpeed = currentSpeed;
+            }
+
+            //叠加玩家受击时的击退冲击力
+            if (impact.magnitude > 0.1f)
+            {
+                horizontalVelocity += impact;
+                // 摩擦力衰减（数值10f代表减速的快慢）
+                impact = Vector3.Lerp(impact, Vector3.zero, Time.deltaTime * 10f); 
             }
 
             // 合并水平与垂直速度（m/s），并统一在此处乘以 Time.deltaTime
@@ -1474,13 +1484,17 @@ public class EldenRingMovement : MonoBehaviour
     // ========== 攻击命中检测 ========== 
     public void CheckAttackHit()
     {
+        //// 如果距离上一次触发还不到 0.1 秒（真实时间），直接无视它
+        if (Time.unscaledTime - lastEventTime < 0.1f) return;
+        lastEventTime = Time.unscaledTime; // 记录本次触发时间
+
        // 防幽灵伤害判定
         if (!isAttacking && !isLightAttacking && !isRunningAttack) return;
 
         float attackRadius = isRunningAttack ? 5f : 2.5f;
         Vector3 attackPoint = isRunningAttack ? transform.position : transform.position + transform.forward * 1.5f + Vector3.up * 1f;
           
-        Collider[] hitColliders = Physics.OverlapSphere(attackPoint, attackRadius);
+        Collider[] hitColliders = Physics.OverlapSphere(attackPoint, attackRadius, enemyLayer);
 
         float knockbackForce = GetCurrentKnockbackForce();
         
@@ -1908,7 +1922,7 @@ public class EldenRingMovement : MonoBehaviour
         // 1. 获取触发施法前，小人的初始动画状态
         int initialState = anim.GetCurrentAnimatorStateInfo(0).shortNameHash;
 
-        // 2. 动态等待：死死盯住动画机，直到它真正开始响应 Trigger 并进入技能状态
+        // 2. 🌟【核心修复】：动态等待！死死盯住动画机，直到它真正开始响应 Trigger 并进入技能状态
         float timeout = 0f;
         while (anim.GetCurrentAnimatorStateInfo(0).shortNameHash == initialState && !anim.IsInTransition(0))
         {
@@ -1917,7 +1931,7 @@ public class EldenRingMovement : MonoBehaviour
             yield return null;
         }
 
-        // 3. 此时 100% 确定已经开始施法，抓取这套重劈动作的【真实长度】
+        // 3. 此时 100% 确定已经开始施法，抓取这套重劈动作的【绝对真实长度】
         AnimatorStateInfo stateInfo = anim.IsInTransition(0) ? anim.GetNextAnimatorStateInfo(0) : anim.GetCurrentAnimatorStateInfo(0);
         float actualAnimLength = stateInfo.length;
 
@@ -1926,9 +1940,9 @@ public class EldenRingMovement : MonoBehaviour
             actualAnimLength = castDuration;
         }
 
-        // 4. 精准等待整个施法动画播放完毕
         float timer = 0f;
-        // ✅ 只要动画没播完，绝对不解除霸体，不归还移动权限！
+        
+        // 4. 🌟【绝对死锁】：只要动画没播完，绝对不解除霸体，不归还移动权限！
         while (timer < actualAnimLength * 0.95f) 
         {
             if (isDead) yield break; 
@@ -1936,7 +1950,7 @@ public class EldenRingMovement : MonoBehaviour
             yield return null;
         }
 
-        // 5. 彻底结束霸体与定身
+        // 5. 动画彻底播完后，才允许收招和移动！
         OnCastFinished();
     }
 
@@ -2160,7 +2174,7 @@ public class EldenRingMovement : MonoBehaviour
     }
 
     // ========== 受击方法 ==========
-    public void TakeDamage(int rawDamage)
+    public void TakeDamage(int rawDamage,Vector3 knockbackDir = default, float knockbackForce = 0f)
     {
          // 已死亡不再受击
         if (isDead) return;
@@ -2186,7 +2200,7 @@ public class EldenRingMovement : MonoBehaviour
         // 保证强制扣血保底至少为 1
         finalDamage = Mathf.Max(1, finalDamage);
 
-        // 🎯 施法霸体
+        // 施法霸体
         if (isCastingInvincible)
         {
             currentHealth -= finalDamage*0.6f;
@@ -2204,6 +2218,12 @@ public class EldenRingMovement : MonoBehaviour
         }
 
         if (isHit) return;
+        
+        //注入物理击退力
+        if (knockbackForce > 0f)
+        {
+            impact = knockbackDir * knockbackForce;
+        }
 
         currentHealth -= finalDamage;        // 正常扣血
         if (healthSlider != null) healthSlider.value = currentHealth;
@@ -2629,9 +2649,15 @@ public class EldenRingMovement : MonoBehaviour
     }
 
 
-    public void TakeBlockDamage(int rawDamage)
+    public void TakeBlockDamage(int rawDamage,Vector3 knockbackDir = default, float knockbackForce = 0f)
     {
         if (isHit) return;
+        
+        //挡时也会有向后的推力
+        if (knockbackForce > 0f)
+        {
+            impact = knockbackDir * knockbackForce;
+        }
 
         float randomizedRawDamage = rawDamage * Random.Range(0.9f, 1.1f);
         float damageReductionFactor = 100f / (100f + defensePower);
