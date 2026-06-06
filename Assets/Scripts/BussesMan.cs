@@ -13,6 +13,8 @@ public class BussesMan : MonoBehaviour
     public GameObject acceptButton;          // 接受任务UI对象
     public GameObject refuseButton;          // 拒绝任务UI对象
     public TaskManager taskManager;          // 任务栏对象
+    public int xpReward = 250;               // 任务经验奖励
+    public int goldReward = 100;             // 任务金币奖励
 
     private bool hasTaskInProgress = false;   // 是否已接受任务且未完成
     private string[] currentDialogLines;   // 当前使用的对话数组
@@ -22,7 +24,10 @@ public class BussesMan : MonoBehaviour
     [TextArea] public string[] dialogLines;
 
     [Header("完成任务后的对话")]
-    [TextArea] public string[] completionDialogLines; 
+    [TextArea] public string[] completionDialogLines;
+
+    [Header("References")]
+    public Transform player;
 
     private Animator anim;
     private bool isPlayerInRange = false;
@@ -31,6 +36,7 @@ public class BussesMan : MonoBehaviour
 
     void Start()
     {
+        if (player == null) player = GameObject.FindGameObjectWithTag("Player").transform;
         anim = GetComponent<Animator>();
         if (anim == null) Debug.LogWarning("未找到Animator组件");
 
@@ -58,10 +64,13 @@ public class BussesMan : MonoBehaviour
         {
             if (Input.GetKeyDown(interactKey))
             {
-                // 如果是完成任务后的对话，直接关闭对话框
+                // 如果是完成任务后的对话，最后一句领取奖励
                 if (isTaskCompletedForDialog)
                 {
-                    CloseAllUI();
+                    if (currentLine == currentDialogLines.Length - 1)
+                        GiveReward();
+                    else
+                        NextLine();
                 }
                 else
                 {
@@ -131,20 +140,50 @@ public class BussesMan : MonoBehaviour
         // 如果是原任务发布对话的最后一句，显示接受/拒绝按钮
         if (!isTaskCompletedForDialog && currentLine == currentDialogLines.Length - 1)
         {
-            dialogPanel?.SetActive(false);
             acceptButton?.SetActive(true);
             refuseButton?.SetActive(true);
         }
-        // 如果是完成任务后的对话，不显示按钮，直接结束对话（或显示一个“领取奖励”按钮）
-        /*
-        else if (isTaskCompletedForDialog && currentLine == currentDialogLines.Length - 1)
+    }
+
+    public void GiveReward()
+    {
+        // 获取玩家脚本并发放奖励
+        if (player != null)
         {
-            // 完成对话结束，关闭对话框，不显示按钮
-            CloseAllUI();
-            // 可选：发放任务奖励
-            //GiveReward();
+            EldenRingMovement playerMovement = player.GetComponent<EldenRingMovement>();
+            if (playerMovement != null)
+            {
+                playerMovement.AddXP(xpReward);
+                playerMovement.AddGold(goldReward);
+                Debug.Log($"发放奖励：经验 +{xpReward}，金币 +{goldReward}");
+            }
+            else
+            {
+                Debug.LogWarning("玩家身上没有 EldenRingMovement 脚本");
+            }
         }
-        */
+        else
+        {
+            Debug.LogError("玩家对象未找到，无法发放奖励");
+        }
+
+        // 播放鼓掌动画
+        if (anim != null)
+        {
+            anim.SetInteger("state", 0);
+            anim.SetTrigger("triggerClap");
+        }
+
+        // 关闭所有 UI
+        CloseAllUI();
+        talkPromptUI?.SetActive(false);
+        isPlayerInRange = false;   // 强制玩家必须远离才能再次交互
+
+        // 重置任务管理器，以便以后可以再次接取任务（如果需要）
+        if (taskManager != null)
+            taskManager.ResetTask();
+
+        Debug.Log("任务奖励已发放，商人重置");
     }
 
     public void AcceptQuest()
