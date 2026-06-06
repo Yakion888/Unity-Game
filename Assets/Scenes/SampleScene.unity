@@ -13465,6 +13465,10 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 3
       objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: d184badf2a99a734aab0d34aab39560d, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1072800675642982989, guid: d184badf2a99a734aab0d34aab39560d, type: 3}
       propertyPath: m_Layer
       value: 3
@@ -14877,11 +14881,11 @@ MonoBehaviour:
   skillHitEffect: {fileID: 1794054703147876750, guid: 852ef6640dca43f4ca3c52917fb2797f, type: 3}
   weaponPoint: {fileID: 1915195200}
   heavyAttackKnockback:
-  - 5
-  - 6
-  - 7
+  - 8
   - 8
   - 10
+  - 14
+  - 16
   lightAttackKnockback:
   - 3
   - 4
@@ -16903,6 +16907,10 @@ PrefabInstance:
     - target: {fileID: 6458604108190039738, guid: f47ded635a0f90f4092ccfbe98f51488, type: 3}
       propertyPath: m_Name
       value: Castle_Root
+      objectReference: {fileID: 0}
+    - target: {fileID: 6458604108190039738, guid: f47ded635a0f90f4092ccfbe98f51488, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6460916878030070907, guid: f47ded635a0f90f4092ccfbe98f51488, type: 3}
       propertyPath: 'm_Materials.Array.data[1]'

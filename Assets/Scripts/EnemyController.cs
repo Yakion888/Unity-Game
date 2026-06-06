@@ -407,6 +407,8 @@ public class BasicEnemyTest : MonoBehaviour
         if (anim != null) anim.SetTrigger("Hit");
         UpdateAnimator(0f, 0f);
 
+        currentStunDuration = hitStunDuration; // 回归默认的短硬直 (0.5秒)
+
         StopCoroutine("EndHitStun"); 
         StartCoroutine("EndHitStun");
     }
@@ -542,7 +544,7 @@ public class BasicEnemyTest : MonoBehaviour
     // 【全新方法】：大招第五段专属击飞（强制滞空 + 播放特殊动画）
      public void TakeLaunchDamage(Vector3 direction, float force, int rawDamage, float upForce = 8f, int damageType = 2)
     {
-        // 🌟【核心修复 2】：即使死了也允许被挑飞！这叫硬核鞭尸！
+        // 即使死了也允许被挑飞！这叫硬核鞭尸！
         if (!isDead)
         {
             float damageReduction = 100f / (100f + enemyDefense);
@@ -595,6 +597,8 @@ public class BasicEnemyTest : MonoBehaviour
             if (anim != null) anim.SetTrigger("KnockUp"); 
         }
 
+        currentStunDuration = 1.0f; 
+
         StopCoroutine(nameof(EndHitStun));
         StartCoroutine(nameof(EndHitStun));
     }
@@ -602,43 +606,42 @@ public class BasicEnemyTest : MonoBehaviour
     
     System.Collections.IEnumerator EndHitStun()
     {
-        // 1. 等待两帧，确保 Animator 已经彻底响应了 Trigger 并切入受击/倒地状态
+         // 1. 等待两帧，确保 Animator 已经彻底响应了 Trigger 并切入受击/倒地状态
         yield return new WaitForEndOfFrame();
         yield return new WaitForEndOfFrame();
 
-        float waitTime = currentStunDuration; // 保底等待时间（如传入的 2.5 秒）
+        float elapsed = 0f;
 
-        // 🌟【核心修复 2：真实长度锁定！】不管动画叫什么名字，直接抓取它的总长度！
-        if (anim != null)
+        // 2. 🌟【核心修复 3：动态双锁检测！】
+        // 我们不再死等一个静态的数值，而是每一帧都去查岗！
+        while (true)
         {
-            AnimatorStateInfo state = anim.IsInTransition(0) ? anim.GetNextAnimatorStateInfo(0) : anim.GetCurrentAnimatorStateInfo(0);
-            
-            // 如果这个动画（比如艰难爬起）的真实长度大于保底的 2.5 秒
-            // 我们就强行把硬直时间拉长，直到它 95% 播完！
-            if (state.length > waitTime)
+            elapsed += Time.deltaTime;
+
+            // 获取动画机当前状态
+            bool isPlayingHitAnim = false;
+            if (anim != null)
             {
-                waitTime = state.length * 0.95f; 
+                AnimatorStateInfo state = anim.GetCurrentAnimatorStateInfo(0);
+                // 判断是不是还在播挨打、击飞、倒地动画
+                isPlayingHitAnim = state.IsName("Hit") || state.IsName("DieBySkill") || state.IsName("KnockUp");
             }
+
+            // 解除硬直的两个条件同时满足：
+            // A. 保底的物理推力时间（currentStunDuration）必须结束，防止推力还没生效就解除
+            // B. 受击动画必须播完（已经切回了 Idle 或 Chase 等）
+            if (elapsed >= currentStunDuration && !isPlayingHitAnim)
+            {
+                break; // 动画播完了，立刻跳出循环，绝不发呆！
+            }
+
+            // 兜底防卡死锁（如果超过 5 秒强行解锁）
+            if (elapsed > 5f) break;
+
+            yield return null;
         }
 
-        // 2. 老老实实地等完这段绝对真实的时间
-        yield return new WaitForSeconds(waitTime);
-
-        // 🌟【核心修复 4：动画死锁！】如果时间到了，但动画机里还在播受击/倒地动画，就死死挂起不准放行！
-        while (anim != null)
-        {
-            AnimatorStateInfo state = anim.GetCurrentAnimatorStateInfo(0);
-            if (state.IsName("DieBySkill") || state.IsName("Hit"))
-            {
-                yield return null; // 继续等下一帧
-            }
-            else
-            {
-                break; // 动画终于切回 Idle 了，允许放行！
-            }
-        }
-
-        // 3. 时间到了，彻底解除封印
+        // 3. 彻底解除封印
         isHitStunned = false; 
         
         if (currentHealth > 0) 
@@ -652,13 +655,13 @@ public class BasicEnemyTest : MonoBehaviour
                 controller.center = originalCenter;
                 controller.stepOffset = originalStepOffset;
                 transform.position += new Vector3(0, 0.05f, 0); // 略微防卡
-                controller.enabled = true; // 🌟 直到此时，才允许控制器重新接管双腿！
+                controller.enabled = true; // 🌟 重新接管双腿
             }
             CapsuleCollider solidCollider = GetComponent<CapsuleCollider>();
             if (solidCollider != null) solidCollider.enabled = true; 
         }
         
-        Debug.Log($"敌人硬直彻底结束 (等待了 {waitTime:F2} 秒)，恢复战斗姿态");
+        Debug.Log($"敌人硬直彻底结束 (耗时 {elapsed:F2} 秒)，瞬间恢复战斗姿态！");
     }
 
     // 动画事件：造成伤害
