@@ -71,7 +71,7 @@ public class RestPointTravel : MonoBehaviour
         }
         else if (Input.GetKeyDown(KeyCode.E))
         {
-            StartCoroutine(Teleport());
+            Teleport();
         }
     }
 
@@ -85,25 +85,22 @@ public class RestPointTravel : MonoBehaviour
     }
 
     //传送代码
-    private IEnumerator Teleport()
+    private void Teleport()
     {
-        if (availablePoints == null || availablePoints.Count == 0) yield break;
+        if (availablePoints == null || availablePoints.Count == 0) return;
 
         var targetPoint = availablePoints[selectedIndex];
         Vector3 targetPos = targetPoint.GetSpawnPosition();
         Quaternion targetRot = targetPoint.GetSpawnRotation();
 
-        if (playerMovement != null)
-        {
-            // 直接调用休息序列（会黑屏、移动、重置世界）
-            playerMovement.StartRestSequence(targetPos, targetRot, null);
-        }
-        else
-        {
-            Debug.LogError("PlayerMove 引用为空，无法传送");
-        }
-
+        // 关闭面板（先关闭，避免传送后仍存在）
         RestPoint.CloseTravelPanel();
+
+        // 调用玩家的传送方法
+        if (playerMovement != null)
+            playerMovement.StartTeleport(targetPos, targetRot);
+        else
+            Debug.LogError("playerMovement 为空，无法传送");
     }
 
 

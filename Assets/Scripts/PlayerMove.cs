@@ -2737,6 +2737,112 @@ public class EldenRingMovement : MonoBehaviour
     //===============================================
     // 带有视觉和听觉表现的完整休息转场流程
     // ===============================================
+    //传送代码
+    public void StartTeleport(Vector3 targetPos, Quaternion targetRot)
+    {
+        if (!isResting)
+            StartCoroutine(TeleportSequence(targetPos, targetRot));
+    }
+
+    private IEnumerator TeleportSequence(Vector3 targetPos, Quaternion targetRot)
+    {
+        isResting = true;
+        if (controller != null) controller.enabled = false;
+
+        // 重置动画和状态标志（与 RestSequenceRoutine 相同）
+        isAttacking = false;
+        isLightAttacking = false;
+        isRunningAttack = false;
+        isCasting = false;
+        isDodging = false;
+        isJumping = false;
+        isStopping = false;
+        isHit = false;
+        isUltimateCasting = false;
+        comboPending = false;
+        lightComboPending = false;
+        targetLeftHandIKWeight = 1f;
+
+        moveInput = Vector2.zero;
+        currentSpeed = 0f;
+
+        if (anim != null)
+        {
+            anim.ResetTrigger("Attack");
+            anim.ResetTrigger("LightAttack");
+            anim.ResetTrigger("Combo");
+            anim.ResetTrigger("LightCombo");
+            anim.ResetTrigger("Cast");
+            anim.ResetTrigger("Dodge");
+            anim.ResetTrigger("Hit");
+            anim.ResetTrigger("BlockHit");
+            if (attackLayerIndex >= 0) anim.SetLayerWeight(attackLayerIndex, 0f);
+            anim.Play("Locomotion", 0, 0f);
+            anim.SetFloat("Speed", 0f);
+            anim.SetFloat("Direction", 0f);
+            anim.SetBool("IsMoving", false);
+            anim.SetBool("IsRunning", false);
+            anim.SetBool("IsGrounded", true);
+            anim.SetBool("IsStopping", false);
+        }
+
+        // 黑屏淡出
+        if (fadeCanvasGroup != null)
+        {
+            float elapsed = 0f;
+            while (elapsed < fadeDuration)
+            {
+                elapsed += Time.deltaTime;
+                fadeCanvasGroup.alpha = elapsed / fadeDuration;
+                yield return null;
+            }
+            fadeCanvasGroup.alpha = 1f;
+        }
+        else
+        {
+            yield return new WaitForSeconds(fadeDuration);
+        }
+        // 移动玩家
+        transform.position = targetPos;
+        transform.rotation = targetRot;
+        Physics.SyncTransforms();   // 立即同步物理世界
+        yield return null;          // 等待一帧，让触发器状态更新
+        ResetCameraBehindPlayer();
+
+        // 重置世界（刷新所有敌人）
+        foreach (BasicEnemyTest enemy in BasicEnemyTest.allEnemies)
+        {
+            if (enemy != null) enemy.RespawnEnemy();
+        }
+
+        // 可选：恢复满血满耐（与休息一致）
+        currentHealth = maxHealth;
+        currentStamina = maxStamina;
+        if (healthSlider != null) healthSlider.value = currentHealth;
+        if (staminaSlider != null) staminaSlider.value = currentStamina;
+
+        // 黑屏淡入
+        if (fadeCanvasGroup != null)
+        {
+            float elapsed = 0f;
+            while (elapsed < fadeDuration)
+            {
+                elapsed += Time.deltaTime;
+                fadeCanvasGroup.alpha = 1f - (elapsed / fadeDuration);
+                yield return null;
+            }
+            fadeCanvasGroup.alpha = 0f;
+        }
+        else
+        {
+            yield return new WaitForSeconds(fadeDuration);
+        }
+
+        // 恢复控制
+        if (controller != null) controller.enabled = true;
+        isResting = false;
+    }
+
     public void StartRestSequence(Vector3 spawnPos, Quaternion spawnRot, AudioClip restSFX)
     {
         if (!isResting) // 防短时间狂按

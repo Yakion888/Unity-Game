@@ -241,12 +241,20 @@ public class BussesMan : MonoBehaviour
 
         // 显示临时休息点
         if (temporaryRestPoint != null)
+        {
+            var restPoint = temporaryRestPoint.GetComponent<RestPoint>();
+            if (restPoint != null) restPoint.isActive = false;
             temporaryRestPoint.SetActive(true);
+        }
         else
             Debug.LogWarning("未指定临时休息点对象，无法显示");
 
         // 商人消失
-        gameObject.SetActive(false);
+        Transform parent = transform.parent;
+        if (parent != null && parent.name == "1stMission")
+            parent.gameObject.SetActive(false);
+        else
+            gameObject.SetActive(false); // 降级方案：只禁用自身
     }
 
     private void OnTriggerEnter(Collider other)

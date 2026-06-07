@@ -32,6 +32,8 @@ public class RestPoint : MonoBehaviour
     [Header("References")]
     public Transform player;
 
+    public float triggerRadius = 2f;
+
     void Start()
     {
         if (player == null) player = GameObject.FindGameObjectWithTag("Player").transform;
@@ -48,34 +50,31 @@ public class RestPoint : MonoBehaviour
         }
     }
 
-    void OnTriggerEnter(Collider other)
-    {
-        if (other.CompareTag("Player"))
-        {
-            isPlayerNear = true;
-            playerMovement = other.GetComponent<EldenRingMovement>();
-            // 显示两个提示
-            if (interactUI != null) interactUI.SetActive(true);
-            if (travelUI != null) travelUI.SetActive(true);
-        }
-    }
-
-    void OnTriggerExit(Collider other)
-    {
-        if (other.CompareTag("Player"))
-        {
-            isPlayerNear = false;
-            playerMovement = null;
-            if (interactUI != null) interactUI.SetActive(false);
-            if (travelUI != null) travelUI.SetActive(false);
-            // 如果传送面板开着，关闭它
-            CloseTravelPanel();
-        }
-    }
-
     void Update()
     {
-        if (!isPlayerNear || playerMovement == null) return;
+        if (playerMovement == null) return;
+        float dist = Vector3.Distance(transform.position, playerMovement.transform.position);
+        bool shouldBeNear = dist <= triggerRadius;
+        if (shouldBeNear != isPlayerNear)
+        {
+            isPlayerNear = shouldBeNear;
+            if (isPlayerNear)
+            {
+                // 进入范围逻辑（显示UI等）
+                if (interactUI != null) interactUI.SetActive(true);
+                if (travelUI != null) travelUI.SetActive(true);
+            }
+            else
+            {
+                // 离开范围逻辑（隐藏UI等）
+                if (interactUI != null) interactUI.SetActive(false);
+                if (travelUI != null) travelUI.SetActive(false);
+                CloseTravelPanel();
+            }
+        }
+
+        if (!isPlayerNear) return;
+        if (playerMovement.isUIOpen) return;
 
         // 按 E 休息
         if (Input.GetKeyDown(KeyCode.E))
@@ -128,7 +127,8 @@ public class RestPoint : MonoBehaviour
         if (interactUI != null) 
         {
             interactUI.SetActive(false);
-            
+            travelUI.SetActive(false);
+
             // 可选：如果你想让它过 2 秒后再次出现（方便玩家再次休息），可以开启一个协程
             StartCoroutine(ShowUIAgainAfterDelay());
         }
@@ -143,6 +143,7 @@ public class RestPoint : MonoBehaviour
         if (isPlayerNear && interactUI != null)
         {
             interactUI.SetActive(true);
+            travelUI.SetActive(true);
         }
     }
 

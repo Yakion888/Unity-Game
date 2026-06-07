@@ -18586,6 +18586,7 @@ MonoBehaviour:
   travelUI: {fileID: 0}
   restSound: {fileID: 8300000, guid: c27be88302a68bf47b11abe37dbb2e4f, type: 3}
   player: {fileID: 0}
+  triggerRadius: 3
 --- !u!65 &1375500790
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -23052,6 +23053,7 @@ MonoBehaviour:
   travelUI: {fileID: 1920884321}
   restSound: {fileID: 8300000, guid: c27be88302a68bf47b11abe37dbb2e4f, type: 3}
   player: {fileID: 1123777159}
+  triggerRadius: 3
 --- !u!65 &1668863527
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -24823,6 +24825,7 @@ MonoBehaviour:
   travelUI: {fileID: 1920884321}
   restSound: {fileID: 8300000, guid: c27be88302a68bf47b11abe37dbb2e4f, type: 3}
   player: {fileID: 1123777159}
+  triggerRadius: 3
 --- !u!135 &1786453423
 SphereCollider:
   m_ObjectHideFlags: 0
