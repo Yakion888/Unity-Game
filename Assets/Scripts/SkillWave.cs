@@ -56,7 +56,7 @@ public class SkillWave : MonoBehaviour
     {
         // 修复 1：用薄薄的长方体（Box）取代圆球！绝不提前命中，绝不拖泥带水
         Vector3 boxCenter = transform.position + transform.forward * hitboxOffsetZ + transform.up * hitboxOffsetY;
-        Collider[] hits = Physics.OverlapBox(boxCenter, hitboxSize / 2f, transform.rotation, enemyLayer);
+        Collider[] hits = Physics.OverlapBox(boxCenter, hitboxSize / 2f, transform.rotation, enemyLayer, QueryTriggerInteraction.Ignore);
         
         HashSet<BasicEnemyTest> damagedEnemies = new HashSet<BasicEnemyTest>();
 

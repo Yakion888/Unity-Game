@@ -64,7 +64,12 @@ public class EldenRingMovement : MonoBehaviour
     public int[] heavyAttackDamage = new int[5] { 15, 20, 20, 35, 50 };   // 5段重攻击伤害
     public int[] lightAttackDamage = new int[3] { 10, 12, 15 };            // 3段轻攻击伤害
     public int runningAttackDamage = 50;                                   // 滑行攻击伤害
-  
+
+    [Header("轻攻击范围动态调优")]
+    // 3段轻攻击的【球体向前推的距离】（例如：肘击推0.8米，飞踢推1.2米）
+    public float[] lightAttackForwardOffset = new float[3] { 1.0f, 1.5f, 1.5f }; 
+    // 3段轻攻击的【球体半径大小】（例如：肘击范围0.5米，飞踢范围0.8米）
+    public float[] lightAttackRadius = new float[3] { 0.5f, 0.8f, 0.8f };
 
     [Header("攻击特效")]
     public GameObject[] heavyAttackEffects;      // 重攻击特效（5段）
@@ -341,7 +346,7 @@ public class EldenRingMovement : MonoBehaviour
         // 【5.19新增】尝试从硬盘读取上次的赐福点进度
         LoadGame();
 
-        // ✅ 【修改】：读完档算出真正的最大血量后，再把当前血量和耐力回满
+        // 读完档算出真正的最大血量后，再把当前血量和耐力回满
         currentStamina = maxStamina;
         currentHealth = maxHealth;
         currentRage = 0f; 
@@ -383,12 +388,12 @@ public class EldenRingMovement : MonoBehaviour
         audioSource.spatialBlend = 0.5f;
         audioSource.volume = 1f;
         
-        // 👇【全局绝杀】：彻底关闭玩家主音源的物理变调，保证所有打击声、挥刀声纯净无比！
+        // 彻底关闭玩家主音源的物理变调，保证所有打击声、挥刀声纯净无比！
         audioSource.dopplerLevel = 0f;
 
         Debug.Log($"相机前向: {Camera.main.transform.forward}");
 
-        // ✅ 【核心修复】：游戏启动的第一帧，强行把相机拉回主角宽阔的后背！
+        // 游戏启动的第一帧，强行把相机拉回主角宽阔的后背！
         ResetCameraBehindPlayer(); 
     }
     
@@ -583,7 +588,7 @@ public class EldenRingMovement : MonoBehaviour
                 dirToTarget.y = 0;
                 if (dirToTarget != Vector3.zero)
                 {
-                    // ✅ 1技能 (isCasting) 锁定转向变慢
+                    // 1技能 (isCasting) 锁定转向变慢
                     float rotSpeed = (isAttacking || isLightAttacking || isUltimateCasting || isCasting) ? rotationSpeed * 0.2f : rotationSpeed;
                     targetRotation = Quaternion.LookRotation(dirToTarget);
                     transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, rotSpeed * Time.deltaTime);
@@ -593,7 +598,7 @@ public class EldenRingMovement : MonoBehaviour
             else if (hasMoveInput && targetMoveDirection.magnitude > 0.1f && (!isAttacking && !isLightAttacking || isUltimateCasting || isCasting))
             {
                  targetRotation = Quaternion.LookRotation(targetMoveDirection);
-                // ✅ 1技能 (isCasting) 自由转向也变慢
+                // 1技能 (isCasting) 自由转向也变慢
                 float currentRotSpeed = (isUltimateCasting || isCasting) ? rotationSpeed * 0.4f : (isRunning ? rotationSpeed : rotationSpeed * 0.8f);
                 transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, currentRotSpeed * Time.deltaTime);
         
@@ -1139,7 +1144,7 @@ public class EldenRingMovement : MonoBehaviour
         if (anim == null) return;
         if (isAttacking || isLightAttacking) return;
 
-         // 🎯 跳跃期间锁定动画参数，避免空中切换移动/原地跳跃动画
+         // 跳跃期间锁定动画参数，避免空中切换移动/原地跳跃动画
         if (isJumping)
         {
             // 保持起跳时的动画速度，不更新 Speed/Direction
@@ -1230,7 +1235,7 @@ public class EldenRingMovement : MonoBehaviour
     
     void StartRunningAttack()
     {
-        // 🎯 检查耐力
+        // 检查耐力
         if (!ConsumeStamina(runningAttackStaminaCost))
         {
             Debug.Log("耐力不足，无法使用滑行攻击！");
@@ -1485,71 +1490,135 @@ public class EldenRingMovement : MonoBehaviour
     // ========== 攻击命中检测 ========== 
     public void CheckAttackHit()
     {
-        //// 如果距离上一次触发还不到 0.1 秒（真实时间），直接无视它
+        // 如果距离上一次触发还不到 0.1 秒（真实时间），直接无视它（防动画引擎抽风双重调用）
         if (Time.unscaledTime - lastEventTime < 0.1f) return;
-        lastEventTime = Time.unscaledTime; // 记录本次触发时间
+        lastEventTime = Time.unscaledTime; 
 
-       // 防幽灵伤害判定
+        // 防幽灵伤害判定
         if (!isAttacking && !isLightAttacking && !isRunningAttack) return;
 
-        float attackRadius = isRunningAttack ? 5f : 2.5f;
-        Vector3 attackPoint = isRunningAttack ? transform.position : transform.position + transform.forward * 1.5f + Vector3.up * 1f;
-          
-        Collider[] hitColliders = Physics.OverlapSphere(attackPoint, attackRadius, enemyLayer);
-
+        // 1. 获取当前攻击的击退力和基础伤害
         float knockbackForce = GetCurrentKnockbackForce();
-        
-        // 【核心修复】：调用我们刚写的 RPG 伤害计算公式
         int damage = GetCalculatedDamage();
-
         int hitDamageType = 0;  
 
-        // 应用暴击
+        // 应用完美闪避后的暴击奖励
         if (nextAttackIsCrit)
         {
             damage = Mathf.RoundToInt(damage * 1.65f);
             hitDamageType = 1;  
             nextAttackIsCrit = false;
         }
-       
-        // 【新增】创建一个名单，记录这一下攻击已经命中了哪些敌人
+   
+        // ==============================================================
+        // 2. 【核心优化】根据不同的攻击流派，使用不同的判定模型收集敌人
+        // ==============================================================
+        List<Collider> validHits = new List<Collider>(); // 用于存放真正被命中的敌人
+
+        if (isLightAttacking)
+        {
+            // 1. 获取当前正在播放的轻击是第几段
+            AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(attackLayerIndex);
+            int comboIndex = 0; // 默认为第一段 (Index 0)
+        
+            if (stateInfo.IsName("LightAttack2")) comboIndex = 1;
+            else if (stateInfo.IsName("LightAttack3")) comboIndex = 2;
+
+            // 2. 从数组中安全地读取对应的范围参数（增加防越界保护）
+            float currentOffset = (comboIndex < lightAttackForwardOffset.Length) ? lightAttackForwardOffset[comboIndex] : 1.0f;
+            float currentRadius = (comboIndex < lightAttackRadius.Length) ? lightAttackRadius[comboIndex] : 0.6f;
+
+            // 3. 应用动态计算出的中心点与半径
+            Vector3 lightAttackCenter = transform.position + transform.forward * currentOffset + Vector3.up * 1f;
+        
+            Collider[] hits = Physics.OverlapSphere(lightAttackCenter, currentRadius, enemyLayer, QueryTriggerInteraction.Ignore);
+            foreach (var hit in hits)
+            {
+                Vector3 dirToEnemy = (hit.transform.position - transform.position).normalized;
+                dirToEnemy.y = 0;
+                Vector3 playerForward = transform.forward;
+                playerForward.y = 0;
+            
+                // 依然保持严格的 60 度前方视角限制，防修脚防后背
+                if (Vector3.Angle(playerForward, dirToEnemy) <= 60f)
+                {
+                    validHits.Add(hit);
+                }
+            }
+        }
+        else if (isAttacking)
+        {
+            // 【大剑重击】: 大范围宽阔斩击
+            // 特点：中心点偏远，半径极大，但引入【扇形过滤】防止“屁股砍人”
+            Vector3 heavyAttackCenter = transform.position + transform.forward * 1.5f + Vector3.up * 1f;
+            float heavyRadius = 3.5f; // 大剑很长，给足3.5米半径
+        
+            Collider[] hits = Physics.OverlapSphere(heavyAttackCenter, heavyRadius, enemyLayer, QueryTriggerInteraction.Ignore);
+            foreach (var hit in hits)
+            {
+                Vector3 dirToEnemy = (hit.transform.position - transform.position).normalized;
+                dirToEnemy.y = 0;
+                Vector3 playerForward = transform.forward;
+                playerForward.y = 0;
+            
+                // 计算玩家前方和敌人的夹角，只允许前方 150度 (左右各75度) 范围内的敌人受击
+                if (Vector3.Angle(playerForward, dirToEnemy) <= 75f)
+                {
+                    validHits.Add(hit);
+                }
+            }
+        }
+        else if (isRunningAttack)
+        {
+            // 【滑行攻击】: 携带巨大惯性的横扫或突进
+            // 【滑行攻击】: 以自身为圆心的 360 度大范围全方位斩击！
+            // 特点：圆心就在玩家自己身上，不需要算任何夹角，只要在范围内全部击飞！
+            Vector3 runAttackCenter = transform.position + Vector3.up * 1f; // 中心拉回玩家身体（抬高1米对准胸口）
+            float runRadius = 6.0f; 
+        
+            Collider[] hits = Physics.OverlapSphere(runAttackCenter, runRadius, enemyLayer, QueryTriggerInteraction.Ignore);
+            foreach (var hit in hits)
+            {
+                // 没有任何角度 if 判断，直接全部加入命中名单！
+                validHits.Add(hit);
+            }
+        }
+
+        // ==============================================================
+        // 3. 统一处理伤害表现与结算（你原本完美的逻辑）
+        // ==============================================================
         HashSet<BasicEnemyTest> damagedEnemies = new HashSet<BasicEnemyTest>();
 
-        foreach (var hit in hitColliders)
+        foreach (var hit in validHits)
         {
             BasicEnemyTest enemy = hit.GetComponent<BasicEnemyTest>();
-            if (enemy != null && !damagedEnemies.Contains(enemy)) // 【修改】检测到敌人，且这个敌人不在“已命中名单”里，才造成伤害
+            if (enemy != null && !damagedEnemies.Contains(enemy)) 
             {
-                damagedEnemies.Add(enemy); // 把敌人加入名单，防止重复扣血
+                damagedEnemies.Add(enemy); // 加入名单，防止多层碰撞体重复扣血
 
                 Vector3 attackDir = (enemy.transform.position - transform.position).normalized;
                 attackDir.y = 0;
 
-                // 【修改】传入 hitDamageType 整数！
                 enemy.TakeDamageWithDirection(attackDir, knockbackForce, damage, hitDamageType);
-                
-                // 【怒气系统】：攻击命中敌人，根据最终伤害积攒怒气
+            
+                // 【怒气系统】：攻击命中积攒怒气
                 if (currentRage < maxRage)
                 {
                     currentRage += (damage * ragePerDamageMultiplier) * rageGainMultiplier;
                     currentRage = Mathf.Clamp(currentRage, 0f, maxRage);
                 }
 
+                // 【战斗反馈】：时间顿帧卡肉
                 StartCoroutine(HitStop()); 
 
-                // 用绝对的数学逻辑定位火花！无视那个5米的大圆球！
-                // 1. 找到怪物真正的肉体中心（胸口大约 1.2 米高的地方）
+                // 【火花生成】：用绝对的数学逻辑定位胸口火花
                 Vector3 chestPos = enemy.transform.position + Vector3.up * 1.2f;
-                
-                // 2. 迎着玩家的刀刃方向（玩家与怪物的连线），稍微往外挪 0.3 米，营造砍在表皮的错觉
                 Vector3 sparkPos = chestPos + (transform.position - enemy.transform.position).normalized * 0.3f;
-                
-                // 3. 读取你之前配好的锁敌点（胸口骨骼），没有的话就绑在怪物根节点
                 Transform attachTarget = enemy.lockOnPoint != null ? enemy.lockOnPoint : enemy.transform;
 
-                // 4. 生成绝对精准的受击火花！
                 SpawnHitEffect(hitEffect, sparkPos, attachTarget);
-                
+            
+                // 【音效播放】
                 if (isLightAttacking) PlayLightAttackHit();
                 else if (isAttacking || isRunningAttack) PlayAttackHit();
             }
@@ -1717,7 +1786,7 @@ public class EldenRingMovement : MonoBehaviour
             // 生成指定的特效
             GameObject effect = Instantiate(vfxPrefab, hitPoint, Quaternion.identity);
             
-            // ✅ 【核心修复】：强行把它变成怪物的子物体！
+            // 核心修复：强行把它变成怪物的子物体！
             // 这样怪物被击退、击飞时，伤口处的火花会死死粘在它身上跟着一起飞！
             if (enemyTransform != null)
             {
@@ -1769,7 +1838,7 @@ public class EldenRingMovement : MonoBehaviour
         StartCoroutine(DelayedPlay(effect));
     }
 
-    // 🎯 根据攻击段数获取特效旋转
+    // 根据攻击段数获取特效旋转
     private Quaternion GetAttackRotation()
     {
         AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(attackLayerIndex);
@@ -1783,23 +1852,23 @@ public class EldenRingMovement : MonoBehaviour
             // Z: 45 让特效呈45度角（右上到左下）
             return weaponPoint.rotation * Quaternion.Euler(20, -90, 245);
         }
-        // 🎯 第二段攻击
+        // 第二段攻击
         if (stateInfo.IsName("Attack2"))
         {
             return weaponPoint.rotation * Quaternion.Euler(90, 0, 5);
         }   
-        // 🎯 第三段攻击
+        // 第三段攻击
         if (stateInfo.IsName("Attack3"))
         {
             
             return weaponPoint.rotation * Quaternion.Euler(20, -30, -45);
         }
-        // 🎯 第四段攻击
+        // 第四段攻击
         if (stateInfo.IsName("Attack4"))
         {
             return weaponPoint.rotation * Quaternion.Euler(90, 0, 0);
         }
-        // 🎯 第五段攻击
+        // 第五段攻击
         if (stateInfo.IsName("Attack5"))
         {
             return weaponPoint.rotation * Quaternion.Euler(80, -20, 0);
@@ -1832,7 +1901,7 @@ public class EldenRingMovement : MonoBehaviour
         yield return null; // 等待一帧
         float maxDuration = 1f; // 保底寿命
     
-        // 🎯 1. 全面重启：所有粒子系统
+        //  1. 全面重启：所有粒子系统
         ParticleSystem[] allParticleSystems = effect.GetComponentsInChildren<ParticleSystem>(true);
         foreach (var ps in allParticleSystems)
         {
@@ -1843,20 +1912,20 @@ public class EldenRingMovement : MonoBehaviour
             ps.Play();
         }
     
-        // 🎯 2. 全面重启：藏在任何角落的新版 Animator 动画机
-        // 🌟【核心修复】：加上 InChildren，把那个控制半透明圆环的动画机挖出来！
+        //  2. 全面重启：藏在任何角落的新版 Animator 动画机
+        // 【核心修复】：加上 InChildren，把那个控制半透明圆环的动画机挖出来！
         Animator[] allAnimators = effect.GetComponentsInChildren<Animator>(true);
         foreach (var animator in allAnimators)
         {
             animator.Rebind();
             animator.Update(0f);
             
-            // 🌟【核心修复】：不管美术把这套动画起名叫 "Play" 还是 "Take 001"，直接抓取默认状态从头播放！
+            // 【核心修复】：不管美术把这套动画起名叫 "Play" 还是 "Take 001"，直接抓取默认状态从头播放！
             AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
             animator.Play(stateInfo.fullPathHash, -1, 0f);
         }
     
-        // 🎯 3. 全面重启：藏在任何角落的旧版 Animation 动画组件
+        //  3. 全面重启：藏在任何角落的旧版 Animation 动画组件
         Animation[] allAnimations = effect.GetComponentsInChildren<Animation>(true);
         foreach (var animation in allAnimations)
         {
@@ -1864,7 +1933,7 @@ public class EldenRingMovement : MonoBehaviour
             animation.Play();
         }
     
-        // 🎯 4. 根据攻击类型动态调整大小
+        // 4. 根据攻击类型动态调整大小
         if (isLightAttacking)
         {
             effect.transform.localScale = Vector3.one * 0.8f;
@@ -1897,14 +1966,14 @@ public class EldenRingMovement : MonoBehaviour
         // 触发施法动画
         if (anim != null)
         {
-            // 🎯 强制让 Animator 内部也停下来，防止之前步行的状态残留在混合树导致“原地太空步/平移”
+            // 强制让 Animator 内部也停下来，防止之前步行的状态残留在混合树导致“原地太空步/平移”
             anim.SetFloat("Speed", 0f);
             anim.SetFloat("Direction", 0f);
             anim.SetBool("IsMoving", false);
             anim.SetBool("IsRunning", false);
 
             anim.SetTrigger("Cast");
-            // 🎯 修复：用新协程替代原来的延迟机制
+            // 修复：用新协程替代原来的延迟机制
             StartCoroutine(CastRoutine());
             
         }
@@ -1923,7 +1992,7 @@ public class EldenRingMovement : MonoBehaviour
         // 1. 获取触发施法前，小人的初始动画状态
         int initialState = anim.GetCurrentAnimatorStateInfo(0).shortNameHash;
 
-        // 2. 🌟【核心修复】：动态等待！死死盯住动画机，直到它真正开始响应 Trigger 并进入技能状态
+        // 2. 【核心修复】：动态等待！死死盯住动画机，直到它真正开始响应 Trigger 并进入技能状态
         float timeout = 0f;
         while (anim.GetCurrentAnimatorStateInfo(0).shortNameHash == initialState && !anim.IsInTransition(0))
         {
@@ -1943,7 +2012,7 @@ public class EldenRingMovement : MonoBehaviour
 
         float timer = 0f;
         
-        // 4. 🌟【绝对死锁】：只要动画没播完，绝对不解除霸体，不归还移动权限！
+        // 4. 【绝对死锁】：只要动画没播完，绝对不解除霸体，不归还移动权限！
         while (timer < actualAnimLength * 0.95f) 
         {
             if (isDead) yield break; 
@@ -1968,7 +2037,7 @@ public class EldenRingMovement : MonoBehaviour
             anim.SetFloat("IdleIndex", 0f); 
         }
 
-        // 🎯 【核心修复】：重置待机计时器，防止施法期间的时间累加导致直接进入休闲待机
+        // 重置待机计时器，防止施法期间的时间累加导致直接进入休闲待机
         IdleSelector idleSelector = GetComponent<IdleSelector>();
         if (idleSelector != null)
         {
@@ -2052,7 +2121,7 @@ public class EldenRingMovement : MonoBehaviour
         
         if (index >= 0 && index < attackHitSounds.Length && attackHitSounds[index] != null)
         {
-            // 🎯 根据攻击段数设置音量
+            // 根据攻击段数设置音量
             float volume = 1.0f;  // 默认音量
         
             if (index == 0)        // 第一段
@@ -2342,7 +2411,7 @@ public class EldenRingMovement : MonoBehaviour
             anim.SetTrigger("Ultimate");
         }
         
-        // ✅【新增】：播放大招起手蓄力音效
+        // 播放大招起手蓄力音效
         if (ultChargeSFX != null && audioSource != null)
         {
             audioSource.PlayOneShot(ultChargeSFX, 1.0f);
@@ -2356,13 +2425,13 @@ public class EldenRingMovement : MonoBehaviour
         isWaitingForQTE = true;
         Time.timeScale = 0.1f; // 时间放慢 10 倍！极其震撼
 
-        // ✅ 【新增】：呼出霸气的居中 QTE 界面！
+        // 呼出居中 QTE 界面！
         if (QTEUIManager.Instance != null)
         {
             QTEUIManager.Instance.ShowQTE();
         }
 
-        // ✅【核心修复】：给空中滞留音效单独开一个小灶，防止被主音源的变调干扰！
+        // 给空中滞留音效单独开一个小灶，防止被主音源的变调干扰！
         if (ultSlowMotionSFX != null)
         {
             GameObject slowMoAudioObj = new GameObject("UltSlowMoSFX");
@@ -2375,7 +2444,7 @@ public class EldenRingMovement : MonoBehaviour
             tempSource.spatialBlend = 0.5f; // 保持 3D 音效
             tempSource.pitch = 1.0f;        // 绝对锁定正常音调
             
-            // 👇 【绝杀修复】：彻底关闭多普勒效应，防止角色高速升空时导致声音物理变调！
+            // 彻底关闭多普勒效应，防止角色高速升空时导致声音物理变调！
             tempSource.dopplerLevel = 0f;   
             
             tempSource.Play();
@@ -2400,7 +2469,7 @@ public class EldenRingMovement : MonoBehaviour
             isWaitingForQTE = false;
             Time.timeScale = 1.0f; // 时间恢复正常
 
-            // ✅ 【新增】：告诉 QTE 界面玩家失败了（触发黯淡消失特效）
+            // 告诉 QTE 界面玩家失败了（触发黯淡消失特效）
             if (QTEUIManager.Instance != null)
             {
                 QTEUIManager.Instance.HideQTE(false);
@@ -2417,13 +2486,13 @@ public class EldenRingMovement : MonoBehaviour
         isWaitingForQTE = false;
         Time.timeScale = 1.0f; // 瞬间解除时间锁定，营造刀刃破空的极速感！
 
-        // ✅ 【新增】：告诉 QTE 界面玩家按成功了（触发金光斩裂特效）
+        // 告诉 QTE 界面玩家按成功了（触发金光斩裂特效）
         if (QTEUIManager.Instance != null)
         {
             QTEUIManager.Instance.HideQTE(true);
         }
 
-        // ✅ 【核心修复】：为 QTE 成功爆音也开一个独立的防变调音源！
+        // 为 QTE 成功爆音也开一个独立的防变调音源！
         AudioClip clipToPlay = ultQTESuccessSFX != null ? ultQTESuccessSFX : perfectDodgeStartSFX;
         if (clipToPlay != null)
         {
@@ -2468,32 +2537,42 @@ public class EldenRingMovement : MonoBehaviour
         float totalDamage = ultimateSlashBaseDamage + (attackPowerBonus * castDamageScalingMultiplier * 0.5f);
         int finalSlashDamage = Mathf.RoundToInt(totalDamage * Random.Range(0.9f, 1.1f));
 
-        Collider[] hitColliders = Physics.OverlapSphere(transform.position, castRadius);
-        HashSet<BasicEnemyTest> slashedEnemies = new HashSet<BasicEnemyTest>(); 
+        // 将判定球的中心微微往前推 1 米，半径限制为 2.5 米
+        Vector3 slashCenter = transform.position + transform.forward * 1.0f;
+        float ultSlashRadius = 2.5f;
 
-        Vector3 attackDir = transform.forward; 
+        //加上 enemyLayer 和 QueryTriggerInteraction.Ignore
+        Collider[] hitColliders = Physics.OverlapSphere(slashCenter, ultSlashRadius, enemyLayer, QueryTriggerInteraction.Ignore);
+
+        HashSet<BasicEnemyTest> slashedEnemies = new HashSet<BasicEnemyTest>();
+        Vector3 playerForward = transform.forward; 
+        playerForward.y = 0;
 
         foreach (var hit in hitColliders)
         {
             BasicEnemyTest enemy = hit.GetComponent<BasicEnemyTest>();
             if (enemy != null && !slashedEnemies.Contains(enemy))
             {
-                slashedEnemies.Add(enemy); 
-                attackDir = (enemy.transform.position - transform.position).normalized;
-                attackDir.y = 0;
+                Vector3 dirToEnemy = (enemy.transform.position - transform.position).normalized;
+                dirToEnemy.y = 0;
 
-                enemy.TakeDamageWithDirection(attackDir, castKnockbackForce * 0.3f, finalSlashDamage, 2);
-                
-                StartCoroutine(HitStop()); 
-                //放弃不靠谱的 ClosestPoint，直接计算真实胸口位置
-                Vector3 chestPos = enemy.transform.position + Vector3.up * 1.2f;
-                Vector3 sparkPos = chestPos + (transform.position - enemy.transform.position).normalized * 0.3f;
-                //利用你之前在怪物身上配好的 lockOnPoint（胸口锁定点/骨骼），把火花绑在肉体上而不是脚底板
-                Transform attachTarget = enemy.lockOnPoint != null ? enemy.lockOnPoint : enemy.transform;
-                
-                GameObject vfxToUse = ultHitEffect != null ? ultHitEffect : hitEffect;
-                SpawnHitEffect(vfxToUse, sparkPos, attachTarget);
-                PlayAttackHit(); 
+                // 【核心锁死】：大招挥击非常狂野，给个前方 180度 (左右各90度) 的大扇形判定，但绝对禁止打到背后！
+                if (Vector3.Angle(playerForward, dirToEnemy) <= 90f)
+                {
+                    slashedEnemies.Add(enemy); 
+                    
+                    enemy.TakeDamageWithDirection(dirToEnemy, castKnockbackForce * 0.3f, finalSlashDamage, 2);
+                    
+                    StartCoroutine(HitStop()); 
+                    
+                    Vector3 chestPos = enemy.transform.position + Vector3.up * 1.2f;
+                    Vector3 sparkPos = chestPos + (transform.position - enemy.transform.position).normalized * 0.3f;
+                    Transform attachTarget = enemy.lockOnPoint != null ? enemy.lockOnPoint : enemy.transform;
+                    
+                    GameObject vfxToUse = ultHitEffect != null ? ultHitEffect : hitEffect;
+                    SpawnHitEffect(vfxToUse, sparkPos, attachTarget);
+                    PlayAttackHit(); 
+                }
             }
         }
     }
@@ -2506,7 +2585,7 @@ public class EldenRingMovement : MonoBehaviour
 
         Debug.Log("第五段击飞判定触发");
 
-        // ✅ 【核心修复】：垂直升龙剑光独立生成！
+        // 垂直升龙剑光独立生成！
         if (ultLaunchEffect != null)
         {
             Vector3 vfxPos = transform.position + transform.forward * 1.0f + Vector3.up * 1.2f;
@@ -2517,29 +2596,39 @@ public class EldenRingMovement : MonoBehaviour
         float totalDamage = ultimateSlashBaseDamage + (attackPowerBonus * castDamageScalingMultiplier * 0.5f);
         int finalSlashDamage = Mathf.RoundToInt(totalDamage * Random.Range(0.9f, 1.1f));
 
-        Collider[] hitColliders = Physics.OverlapSphere(transform.position, castRadius);
+        Vector3 launchCenter = transform.position + transform.forward * 1.0f;
+        float ultLaunchRadius = 2.5f; 
+
+        Collider[] hitColliders = Physics.OverlapSphere(launchCenter, ultLaunchRadius, enemyLayer, QueryTriggerInteraction.Ignore);
         HashSet<BasicEnemyTest> slashedEnemies = new HashSet<BasicEnemyTest>(); 
+
+        Vector3 playerForward = transform.forward;
+        playerForward.y = 0;
 
         foreach (var hit in hitColliders)
         {
             BasicEnemyTest enemy = hit.GetComponent<BasicEnemyTest>();
             if (enemy != null && !slashedEnemies.Contains(enemy))
             {
-                slashedEnemies.Add(enemy); 
-                Vector3 knockbackDir = (enemy.transform.position - transform.position).normalized;
-                knockbackDir.y = 0;
+                Vector3 dirToEnemy = (enemy.transform.position - transform.position).normalized;
+                dirToEnemy.y = 0;
 
-                enemy.TakeLaunchDamage(knockbackDir, castKnockbackForce * 0.5f, finalSlashDamage, ultimateLaunchForce, 2);
-                
-                StartCoroutine(HitStop());
-                Vector3 chestPos = enemy.transform.position + Vector3.up * 1.2f;
-                Vector3 sparkPos = chestPos + (transform.position - enemy.transform.position).normalized * 0.3f; 
-                Transform attachTarget = enemy.lockOnPoint != null ? enemy.lockOnPoint : enemy.transform;
+                // 【核心锁死】：升龙击飞也只判定前方 180度 内的敌人
+                if (Vector3.Angle(playerForward, dirToEnemy) <= 90f)
+                {
+                    slashedEnemies.Add(enemy); 
+                    
+                    enemy.TakeLaunchDamage(dirToEnemy, castKnockbackForce * 0.5f, finalSlashDamage, ultimateLaunchForce, 2);
+                    
+                    StartCoroutine(HitStop());
+                    Vector3 chestPos = enemy.transform.position + Vector3.up * 1.2f;
+                    Vector3 sparkPos = chestPos + (transform.position - enemy.transform.position).normalized * 0.3f; 
+                    Transform attachTarget = enemy.lockOnPoint != null ? enemy.lockOnPoint : enemy.transform;
 
-                // 大招必须用 skillHitEffect（如果没有就拿 hitEffect 兜底）
-                GameObject vfxToUse = ultHitEffect != null ? ultHitEffect : hitEffect;
-                SpawnHitEffect(vfxToUse, sparkPos, attachTarget);
-                PlayAttackHit(); 
+                    GameObject vfxToUse = ultHitEffect != null ? ultHitEffect : hitEffect;
+                    SpawnHitEffect(vfxToUse, sparkPos, attachTarget);
+                    PlayAttackHit(); 
+                }
             }
         }
     }
@@ -2587,7 +2676,10 @@ public class EldenRingMovement : MonoBehaviour
 
         int finalDamage = Mathf.RoundToInt(totalDamage * Random.Range(0.9f, 1.1f));
 
-        Collider[] hitColliders = Physics.OverlapSphere(transform.position, castRadius * 1.5f); // 范围比普通技能更大
+        Vector3 slamCenter = transform.position + Vector3.up * 0.5f; 
+        float slamRadius = 7.0f; 
+
+        Collider[] hitColliders = Physics.OverlapSphere(slamCenter, slamRadius, enemyLayer, QueryTriggerInteraction.Ignore);
         HashSet<BasicEnemyTest> damagedEnemies = new HashSet<BasicEnemyTest>();
 
         foreach (var hit in hitColliders)
@@ -2597,7 +2689,7 @@ public class EldenRingMovement : MonoBehaviour
             {
                 damagedEnemies.Add(enemy); 
                 
-                // 【先抹平高度差，再计算方向！】保证 100% 水平击退力度！
+                // 【先抹平高度差，再计算方向】保证 100% 水平击退力度！
                 Vector3 enemyPos = enemy.transform.position;
                 Vector3 playerPos = transform.position;
                 enemyPos.y = 0;
@@ -2867,7 +2959,7 @@ public class EldenRingMovement : MonoBehaviour
         isJumping = false;   
         isStopping = false;  
         isHit = false;       
-        isUltimateCasting = false; // 👈【新增】坐篝火时解锁大招
+        isUltimateCasting = false; // 坐篝火时解锁大招
         comboPending = false;
         lightComboPending = false;
         targetLeftHandIKWeight = 1f; // 兜底：挨打/攻击结束/复活时，强制恢复双手握持
@@ -3007,7 +3099,7 @@ public class EldenRingMovement : MonoBehaviour
             anim.ResetTrigger("Hit");
             anim.ResetTrigger("BlockHit");
         }
-        // 🎯 添加：受击结束后，如果格挡键还按着，重新进入格挡状态
+        // 受击结束后，如果格挡键还按着，重新进入格挡状态
         if (isBlocking)
         {
             anim.SetBool("IsBlocking", true);
@@ -3063,7 +3155,7 @@ public class EldenRingMovement : MonoBehaviour
         transform.position = respawnPosition;
         transform.rotation = respawnRotation;
 
-        // ✅【核心修复】：复活时同样瞬间重置相机到背后
+        // 复活时同样瞬间重置相机到背后
         ResetCameraBehindPlayer();
         
         // ======= 重置动画 =======
@@ -3200,7 +3292,7 @@ public class EldenRingMovement : MonoBehaviour
             tempSource.volume = 0.8f;
             tempSource.spatialBlend = 0.5f; 
             
-            // 👇 【绝杀修复】：关闭完美闪避音效的多普勒效应！
+            // 关闭完美闪避音效的多普勒效应！
             tempSource.dopplerLevel = 0f;   
             
             tempSource.Play();
@@ -3352,7 +3444,7 @@ public class EldenRingMovement : MonoBehaviour
         {
             weaponLevel++;
             
-            // 🌟 武器升级后，强制重新计算面板攻击力
+            // 武器升级后，强制重新计算面板攻击力
             RecalculateAttributes(); 
             
             // 升级后自动存档
@@ -3424,7 +3516,7 @@ public class EldenRingMovement : MonoBehaviour
         return 500 + (currentLevel * currentLevel * 50);
     }
 
-    // 在赐福点操作 UI 进行加点
+    // 操作 UI 进行加点
     public bool TryLevelUp(string statName)
     {
         int requiredXP = GetXPRequirementForNextLevel();
@@ -3522,7 +3614,7 @@ public class EldenRingMovement : MonoBehaviour
             transform.rotation = respawnRotation;
             if (controller != null) controller.enabled = true;
 
-            // ✅ 【核心修复】：不管有没有旧存档，游戏启动时都必须根据属性值计算一遍攻击力和最大血量！
+            // 不管有没有旧存档，游戏启动时都必须根据属性值计算一遍攻击力和最大血量！
             RecalculateAttributes();
 
             Debug.Log("读取存档成功！已传送到最后一次休息的赐福点。");
