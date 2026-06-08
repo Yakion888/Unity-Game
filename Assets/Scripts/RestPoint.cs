@@ -11,8 +11,9 @@ public class RestPoint : MonoBehaviour
     public string restPointName = "休息点";  // 显示名称
     public GameObject fastTravelPanelPrefab; // 传送面板预制体
     public KeyCode travelKey = KeyCode.X;    // 打开传送面板的按键
+    public static List<RestPoint> allActiveRestPoints = new List<RestPoint>();
+    public GameObject parentToShow;   // 需要显示的父对象
 
-    private static List<RestPoint> allActiveRestPoints = new List<RestPoint>();
     private static GameObject currentTravelPanel = null;
     private static bool isTravelPanelOpen = false;
 
@@ -47,6 +48,22 @@ public class RestPoint : MonoBehaviour
         {
             if (!allActiveRestPoints.Contains(this))
                 allActiveRestPoints.Add(this);
+        }
+    }
+
+    // 用于从存档中恢复激活状态
+    public void Activate()
+    {
+        // 确保父对象显示
+        if (parentToShow != null && !parentToShow.activeSelf)
+            parentToShow.SetActive(true);
+
+        if (!isActive)
+        {
+            isActive = true;
+            if (!allActiveRestPoints.Contains(this))
+                allActiveRestPoints.Add(this);
+            Debug.Log($"休息点 {restPointName} 已激活");
         }
     }
 

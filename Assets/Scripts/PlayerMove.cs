@@ -3577,6 +3577,17 @@ public class EldenRingMovement : MonoBehaviour
         PlayerPrefs.SetInt("Resistance", statResistance);
         PlayerPrefs.SetInt("Spirit", statSpirit);
         PlayerPrefs.SetInt("WeaponLevel", weaponLevel); // 存储武器等级
+        //保存已激活的休息点列表
+        string activePoints = "";
+        foreach (var rp in RestPoint.allActiveRestPoints)
+        {
+            if (rp != null)
+            {
+                if (!string.IsNullOrEmpty(activePoints)) activePoints += ",";
+                activePoints += rp.restPointName;
+            }
+        }
+        PlayerPrefs.SetString("ActiveRestPoints", activePoints);
 
         // 立刻写入硬盘
         PlayerPrefs.Save();
@@ -3604,6 +3615,26 @@ public class EldenRingMovement : MonoBehaviour
             statResistance = PlayerPrefs.GetInt("Resistance", 10);
             statSpirit = PlayerPrefs.GetInt("Spirit", 10);
             weaponLevel = PlayerPrefs.GetInt("WeaponLevel", 0); // 读取武器等级
+
+            // 恢复已激活的休息点
+            string savedActivePoints = PlayerPrefs.GetString("ActiveRestPoints", "");
+            if (!string.IsNullOrEmpty(savedActivePoints))
+            {
+                string[] names = savedActivePoints.Split(',');
+                // 查找场景中所有休息点（包括未激活的）
+                RestPoint[] allRestPoints = FindObjectsOfType<RestPoint>(true);
+                foreach (string name in names)
+                {
+                    foreach (var rp in allRestPoints)
+                    {
+                        if (rp.restPointName == name)
+                        {
+                            rp.Activate();
+                            break;
+                        }
+                    }
+                }
+            }
 
             respawnPosition = new Vector3(x, y, z);
             respawnRotation = Quaternion.Euler(0, rotY, 0);

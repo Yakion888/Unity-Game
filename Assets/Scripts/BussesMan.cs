@@ -180,6 +180,7 @@ public class BussesMan : MonoBehaviour
 
         // 关闭所有 UI
         CloseAllUI();
+        taskManager.CloseTaskBar();
         talkPromptUI?.SetActive(false);
         isPlayerInRange = false;   // 强制玩家必须远离才能再次交互
 

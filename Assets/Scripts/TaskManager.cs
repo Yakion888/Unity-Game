@@ -32,6 +32,11 @@ public class TaskManager : MonoBehaviour
         taskBar.SetActive(true);
     }
 
+    public void CloseTaskBar()
+    {
+        taskBar.SetActive(false);
+    }
+
     public void ResetTask()
     {
         taskActive = false;
