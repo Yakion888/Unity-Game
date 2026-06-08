@@ -18593,6 +18593,7 @@ MonoBehaviour:
   restPointName: "\u4F11\u606F\u70B9"
   fastTravelPanelPrefab: {fileID: 0}
   travelKey: 116
+  parentToShow: {fileID: 0}
   specificSpawnPoint: {fileID: 0}
   interactUI: {fileID: 41488186}
   travelUI: {fileID: 0}
@@ -23060,6 +23061,7 @@ MonoBehaviour:
   restPointName: "\u4E34\u65F6\u4F4F\u6240"
   fastTravelPanelPrefab: {fileID: 3741237774490595230, guid: da6e5ecc3ebb0264a931173b83dfa0b1, type: 3}
   travelKey: 120
+  parentToShow: {fileID: 1811476774}
   specificSpawnPoint: {fileID: 0}
   interactUI: {fileID: 41488186}
   travelUI: {fileID: 1920884321}
@@ -24832,6 +24834,7 @@ MonoBehaviour:
   restPointName: "\u5E7F\u573A\u4F11\u606F\u70B9"
   fastTravelPanelPrefab: {fileID: 3741237774490595230, guid: da6e5ecc3ebb0264a931173b83dfa0b1, type: 3}
   travelKey: 120
+  parentToShow: {fileID: 0}
   specificSpawnPoint: {fileID: 0}
   interactUI: {fileID: 41488186}
   travelUI: {fileID: 1920884321}
