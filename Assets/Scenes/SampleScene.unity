@@ -5466,6 +5466,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ActionLogManager
   logContainer: {fileID: 377985228}
   logTextPrefab: {fileID: 6576478142306135364, guid: 2e9f80216c55e58408d7eb8d4afc7bc1, type: 3}
+  messageInterval: 0.4
 --- !u!114 &377985230
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -15053,10 +15054,9 @@ MonoBehaviour:
   rageText: {fileID: 1009219138}
   maxRage: 100
   currentRage: 0
-  baseRageRegenRate: 2
-  maxRageRegenRate: 15
-  ragePerDamageMultiplier: 2
-  rageDecayRate: 5
+  lightAttackRage: 3
+  heavyAttackRage: 10
+  runningAttackRage: 15
   respawnPosition: {x: 0, y: 0, z: 0}
   respawnRotation: {x: 0, y: 0, z: 0, w: 1}
   fadeCanvasGroup: {fileID: 1774309796}

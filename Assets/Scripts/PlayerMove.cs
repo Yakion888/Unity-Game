@@ -104,10 +104,9 @@ public class EldenRingMovement : MonoBehaviour
     [Header("怒气系统")]
     public float maxRage = 100f;               // 最大怒气值
     public float currentRage = 0f;             // 当前怒气值
-    public float baseRageRegenRate = 2f;       // 满血时的基础怒气恢复（每秒）
-    public float maxRageRegenRate = 15f;       // 残血时的最大怒气恢复（每秒）
-    public float ragePerDamageMultiplier = 0.15f; // 造成伤害转化为怒气的比例（比如打50点伤害，积攒7.5点怒气）
-    public float rageDecayRate = 5f;           // 脱战后的怒气衰减速度（每秒掉多少怒气）
+    public float lightAttackRage = 3f;    // 轻击命中单体获得怒气
+    public float heavyAttackRage = 10f;   // 重击命中单体获得怒气
+    public float runningAttackRage = 15f; // 滑行攻击命中单体获得怒气
 
     [Header("存档与复活系统")]
     public Vector3 respawnPosition;      // 记录的复活位置
@@ -712,34 +711,9 @@ public class EldenRingMovement : MonoBehaviour
         // 同步耐力条 UI
         if (staminaSlider != null)  staminaSlider.value = currentStamina;
 
-        // ===========================================
-        // 【新增】怒气动态自动积攒逻辑（战时积攒，脱战消退；血量越低，积攒越快）
-        // ===========================================
+        // 同步怒气条UI（怒气现在完全由攻击命中等行为触发积攒）
         if (!isDead)
         {
-            if (isInCombatCached) 
-            {
-                // 1. 处于战斗中：自动积攒怒气（血越低越快）
-                if (currentRage < maxRage)
-                {
-                    float healthPercent = currentHealth / maxHealth;
-                    float currentRegenRate = Mathf.Lerp(maxRageRegenRate, baseRageRegenRate, healthPercent);
-                    
-                    currentRage += currentRegenRate * Time.deltaTime;
-                    currentRage = Mathf.Clamp(currentRage, 0f, maxRage);
-                }
-            }
-            else 
-            {
-                // 2. 脱离战斗：缓慢流失怒气
-                if (currentRage > 0f)
-                {
-                    currentRage -= rageDecayRate * Time.deltaTime;
-                    currentRage = Mathf.Clamp(currentRage, 0f, maxRage);
-                }
-            }
-
-            // 同步怒气条UI
             if (rageSlider != null) rageSlider.value = currentRage;
         }
             
@@ -1249,7 +1223,6 @@ public class EldenRingMovement : MonoBehaviour
         comboPending = false;
         comboPendingTime = 0;
         isRunningAttack = true;
-        isAttacking = true;
         anim.Play("RunningAttack", 0, 0f);
         lastSpeed = 0f;
         if (controller != null) controller.Move(Vector3.zero);
@@ -1329,7 +1302,7 @@ public class EldenRingMovement : MonoBehaviour
         
             lastSpeed = 0f;
             if (controller != null) controller.Move(Vector3.zero);
-            Debug.Log("完美闪避奖励：直接打出第四段重攻击");
+            //Debug.Log("完美闪避奖励：直接打出第四段重攻击");
             return;
         }
 
@@ -1605,12 +1578,6 @@ public class EldenRingMovement : MonoBehaviour
 
                 enemy.TakeDamageWithDirection(attackDir, knockbackForce, damage, hitDamageType);
             
-                // 【怒气系统】：攻击命中积攒怒气
-                if (currentRage < maxRage)
-                {
-                    currentRage += (damage * ragePerDamageMultiplier) * rageGainMultiplier;
-                    currentRage = Mathf.Clamp(currentRage, 0f, maxRage);
-                }
 
                 // 【战斗反馈】：时间顿帧卡肉
                 StartCoroutine(HitStop()); 
@@ -1626,6 +1593,36 @@ public class EldenRingMovement : MonoBehaviour
                 if (isLightAttacking) PlayLightAttackHit();
                 else if (isAttacking || isRunningAttack) PlayAttackHit();
             }
+        }
+
+        // ==============================================================
+        // 4. 解绑伤害，按固定动作积攒怒气
+        // ==============================================================
+        int actualHitCount = damagedEnemies.Count; // 算出本次动作真正砍到了几个怪
+        if (actualHitCount > 0 && currentRage < maxRage)
+        {
+            // 步骤A：根据当前的攻击动作，获取基础固定怒气值
+            float baseActionRage = 0f;
+            if (isLightAttacking) baseActionRage = lightAttackRage;
+            else if (isAttacking) baseActionRage = heavyAttackRage;
+            else if (isRunningAttack) baseActionRage = runningAttackRage;
+
+            // 【机制奖励】：如果是完美闪避后的暴击一击，这一下不仅伤害高，怒气也给 1.5 倍！
+            if (hitDamageType == 1) 
+            {
+                baseActionRage *= 1.5f;
+            }
+        
+            // 步骤B：ARPG 群攻衰减公式 (打1个100%，打2个130%，打3个160%...)
+            float aoeMultiplier = 1f + (actualHitCount - 1) * 0.3f; 
+
+            // 步骤C：引入你的RPG精神力加成 
+            // （rageGainMultiplier 已经在你的 RecalculateAttributes 中写好了：1 + statSpirit * 0.02f）
+            float finalRage = baseActionRage * aoeMultiplier * rageGainMultiplier;
+
+            // 步骤D：结算并更新 UI
+            currentRage += finalRage;
+            currentRage = Mathf.Clamp(currentRage, 0f, maxRage);
         }
     }
 
@@ -2256,8 +2253,9 @@ public class EldenRingMovement : MonoBehaviour
         // 无敌帧判定（包括完美闪避）
         if (isInvincible)
         {
-            Debug.Log("完美闪避！触发慢动作和暴击");
+            //Debug.Log("完美闪避！触发慢动作和暴击");
             StartCoroutine(PerfectDodgeReward());
+            currentRage += 10.0f;
             nextAttackIsCrit = true;
             nextHeavyAttackIsFourth = true; 
             return; // 不扣血，不进入受击硬直
