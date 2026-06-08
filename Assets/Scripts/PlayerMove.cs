@@ -70,6 +70,8 @@ public class EldenRingMovement : MonoBehaviour
     public float[] lightAttackForwardOffset = new float[3] { 1.0f, 1.5f, 1.5f }; 
     // 3段轻攻击的【球体半径大小】（例如：肘击范围0.5米，飞踢范围0.8米）
     public float[] lightAttackRadius = new float[3] { 0.5f, 0.8f, 0.8f };
+    // 3段轻攻击的角度限制（60意味着前方120度，90意味着前方180度半圆）
+    public float[] lightAttackAngle = new float[3] { 60f, 60f, 90f };
 
     [Header("攻击特效")]
     public GameObject[] heavyAttackEffects;      // 重攻击特效（5段）
@@ -1527,10 +1529,12 @@ public class EldenRingMovement : MonoBehaviour
             // 2. 从数组中安全地读取对应的范围参数（增加防越界保护）
             float currentOffset = (comboIndex < lightAttackForwardOffset.Length) ? lightAttackForwardOffset[comboIndex] : 1.0f;
             float currentRadius = (comboIndex < lightAttackRadius.Length) ? lightAttackRadius[comboIndex] : 0.6f;
+            float currentAngle = (lightAttackAngle != null && comboIndex < lightAttackAngle.Length) ? lightAttackAngle[comboIndex] : 60f;
 
             // 3. 应用动态计算出的中心点与半径
             Vector3 lightAttackCenter = transform.position + transform.forward * currentOffset + Vector3.up * 1f;
         
+            // 免疫隐形触发器
             Collider[] hits = Physics.OverlapSphere(lightAttackCenter, currentRadius, enemyLayer, QueryTriggerInteraction.Ignore);
             foreach (var hit in hits)
             {
@@ -1539,8 +1543,8 @@ public class EldenRingMovement : MonoBehaviour
                 Vector3 playerForward = transform.forward;
                 playerForward.y = 0;
             
-                // 依然保持严格的 60 度前方视角限制，防修脚防后背
-                if (Vector3.Angle(playerForward, dirToEnemy) <= 60f)
+                // 应用读取的角度
+                 if (Vector3.Angle(playerForward, dirToEnemy) <= currentAngle)
                 {
                     validHits.Add(hit);
                 }
@@ -2675,11 +2679,9 @@ public class EldenRingMovement : MonoBehaviour
         }
 
         int finalDamage = Mathf.RoundToInt(totalDamage * Random.Range(0.9f, 1.1f));
-
-        Vector3 slamCenter = transform.position + Vector3.up * 0.5f; 
         float slamRadius = 7.0f; 
 
-        Collider[] hitColliders = Physics.OverlapSphere(slamCenter, slamRadius, enemyLayer, QueryTriggerInteraction.Ignore);
+        Collider[] hitColliders = Physics.OverlapSphere(transform.position, slamRadius, enemyLayer,QueryTriggerInteraction.Ignore); // 范围比普通技能更大
         HashSet<BasicEnemyTest> damagedEnemies = new HashSet<BasicEnemyTest>();
 
         foreach (var hit in hitColliders)
@@ -2689,7 +2691,7 @@ public class EldenRingMovement : MonoBehaviour
             {
                 damagedEnemies.Add(enemy); 
                 
-                // 【先抹平高度差，再计算方向】保证 100% 水平击退力度！
+                // 【先抹平高度差，再计算方向！】保证 100% 水平击退力度！
                 Vector3 enemyPos = enemy.transform.position;
                 Vector3 playerPos = transform.position;
                 enemyPos.y = 0;
@@ -2822,7 +2824,7 @@ public class EldenRingMovement : MonoBehaviour
         // ============================================
         SaveGame();
 
-        if (ActionLogManager.Instance != null) ActionLogManager.Instance.ShowMessage("在赐福点休息，生命与状态已恢复");
+        if (ActionLogManager.Instance != null) ActionLogManager.Instance.ShowMessage("在赐福点休息，生命与状态已恢复(游戏进度保存)");
     }
 
 
@@ -3466,7 +3468,7 @@ public class EldenRingMovement : MonoBehaviour
         }
     }
 
-    //===================升级与获取经验的方法================
+    //===================升级与获取经验金币的方法================
     // 击杀敌人获取经验
     public void AddXP(int amount)
     {
@@ -3474,7 +3476,7 @@ public class EldenRingMovement : MonoBehaviour
         // 把 Debug.Log 改为 UI 播报：
         if (ActionLogManager.Instance != null)
         {
-            ActionLogManager.Instance.ShowMessage($"击败敌人，获得 {amount} 卢恩");
+            ActionLogManager.Instance.ShowMessage($"击败敌人，获得 {amount} 经验");
         }
     }
 
@@ -3495,7 +3497,7 @@ public class EldenRingMovement : MonoBehaviour
         // 把 Debug.Log 改为 UI 播报：
         if (ActionLogManager.Instance != null)
         {
-            ActionLogManager.Instance.ShowMessage($"领取奖励，获得 {amount} 卢恩");
+            ActionLogManager.Instance.ShowMessage($"领取奖励，获得 {amount} 经验");
         }
     }
 
@@ -3580,7 +3582,7 @@ public class EldenRingMovement : MonoBehaviour
 
         // 立刻写入硬盘
         PlayerPrefs.Save();
-        if (ActionLogManager.Instance != null) ActionLogManager.Instance.ShowMessage("游戏进度已保存");
+        
     }
 
     public void LoadGame()
