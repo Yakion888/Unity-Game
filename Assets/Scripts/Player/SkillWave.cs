@@ -80,22 +80,15 @@ public class SkillWave : MonoBehaviour
                         lastVfxTime[enemy] = Time.time;
 
                         // 特效排他性清理,寻找怪物身上有没有上一波还没消散完的旧火花（通过名字识别），如果有，直接销毁，为新火花腾地方
-                        Transform oldSpark = enemy.transform.Find("Unique_SkillHitSpark");
-                        if (oldSpark != null)
-                        {
-                            Destroy(oldSpark.gameObject);
-                        }
-
-                        // 生成特效
                         Vector3 chestPos = enemy.transform.position + Vector3.up * 1.2f;
                         Vector3 sparkPos = chestPos - moveDirection * 0.2f;
-                        GameObject effect = Instantiate(hitEffectPrefab, sparkPos, Quaternion.LookRotation(-moveDirection));
                         
-                        //方便识别和清理
-                        effect.name = "Unique_SkillHitSpark";
-
+                        // 从池子拿取命中火花
+                        GameObject effect = VFXPoolManager.Instance.SpawnFromPool(hitEffectPrefab, sparkPos, Quaternion.LookRotation(-moveDirection));
                         effect.transform.SetParent(enemy.transform, true);
-                        Destroy(effect, 1.0f); 
+                        
+                        // 1秒后自动回收到池子
+                        VFXPoolManager.Instance.ReturnToPool(effect, 1.0f);
                     }
                 }
             }
