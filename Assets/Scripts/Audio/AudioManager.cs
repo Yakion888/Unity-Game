@@ -1,134 +1,91 @@
 using UnityEngine;
+using System.Collections;
 
+// 行业标准的全局 BGM 交叉推流管理器 (0延迟 0卡顿)
 public class AudioManager : MonoBehaviour
 {
-    public static AudioManager Instance { get; private set; }
+    public static AudioManager Instance;
 
-    [Header("BGM 音源")]
-    public AudioSource normalBgmSource;    // 常规BGM音源
-    public AudioSource combatBgmSource;    // 战斗BGM音源（暂未使用，预留）
+    [Header("绑定场景中你手动创建的音源")]
+    [Tooltip("把你场景里的 NormalBgmSource 拖到这里")]
+    public AudioSource exploreSource;  
+    [Tooltip("把你场景里的 CombatBgmSource 拖到这里")]
+    public AudioSource combatSource;   
+    
+    [Header("音量与渐变设置")]
+    [Range(0f, 1f)] public float maxBGMVolume = 0.5f; 
+    public float crossfadeDuration = 2.0f;            
 
-    [Header("BGM 淡入淡出时间")]
-    public float fadeDuration = 1f;
-
-    private bool isInCombat = false;
-    private float normalVolume;
-    private float combatVolume;
-    private Coroutine currentFadeRoutine = null;
+    private bool isCombatBGMPlaying = false;
+    private Coroutine fadeCoroutine;
 
     private void Awake()
     {
-        if (Instance != null && Instance != this)
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
+
+        if (exploreSource == null || combatSource == null)
         {
-            Destroy(gameObject);
+            Debug.LogError("严重错误：请在 AudioManager 面板中拖入探索和战斗的 AudioSource！");
             return;
         }
-        Instance = this;
-        DontDestroyOnLoad(gameObject); // 场景切换时保留
+
+        // 强行接管你的手动配置，保证参数不出错
+        exploreSource.loop = true;
+        combatSource.loop = true;
+        exploreSource.spatialBlend = 0f; // 强制2D，防声音忽远忽近
+        combatSource.spatialBlend = 0f;
+
+        // 游戏启动时，两首歌都在后台“同时”跑起来！
+        // 把战斗音量锁死为 0，这样绝不会被听到
+        exploreSource.volume = maxBGMVolume;
+        combatSource.volume = 0f;
+
+        if (!exploreSource.isPlaying) exploreSource.Play();
+        if (!combatSource.isPlaying) combatSource.Play();
     }
 
-    private void Start()
+    public void SetCombatState(bool inCombat, bool forceRestart = false)
     {
-        if (normalBgmSource == null)
-            Debug.LogError("Normal BGM AudioSource not assigned!");
-        else
-        {
-            normalVolume = normalBgmSource.volume;
-            normalBgmSource.loop = true;
-            normalBgmSource.Play();
-        }
+        if (exploreSource == null || combatSource == null) return;
+        if (isCombatBGMPlaying == inCombat && !forceRestart) return;
 
-        if (combatBgmSource != null)
-        {
-            combatVolume = combatBgmSource.volume;
-            combatBgmSource.loop = true;
-            combatBgmSource.volume = 0;
-            combatBgmSource.Play();
-        }
-    }
+        isCombatBGMPlaying = inCombat;
 
-    /// <summary>
-    /// 设置战斗状态（由玩家脚本调用）
-    /// </summary>
-    /// <param name="inCombat">是否进入战斗</param>
-    /// <param name="restartCombatBgm">是否从头播放战斗BGM（仅当 inCombat = true 时有效）</param>
-    public void SetCombatState(bool inCombat, bool restartCombatBgm = false)
-    {
-        if (isInCombat == inCombat) return;
+        if (fadeCoroutine != null) StopCoroutine(fadeCoroutine);
 
         if (inCombat)
         {
-            // 如果需要重启战斗 BGM，则先停止并从头播放
-            if (restartCombatBgm)
-            {
-                combatBgmSource.Stop();
-                combatBgmSource.Play();
-                combatBgmSource.volume = 0f;  // 静音开始，等待淡入
-            }
-            else
-            {
-                // 不重启：确保战斗 BGM 正在播放（如果暂停则恢复）
-                if (!combatBgmSource.isPlaying)
-                    combatBgmSource.UnPause();
-            }
+            // 如果要求强制重头放（刚发现敌人），我们不动 Play，而是直接把进度条拨回 0 秒！极致性能！
+            if (forceRestart) combatSource.time = 0f; 
+            fadeCoroutine = StartCoroutine(CrossfadeBGM(exploreSource, combatSource));
         }
-
-         // 执行淡入淡出切换
-        if (currentFadeRoutine != null)
-            StopCoroutine(currentFadeRoutine);   
-        
-        if (inCombat)
-            currentFadeRoutine = StartCoroutine(FadeBGM(normalBgmSource, combatBgmSource, fadeDuration));
-
         else
-            currentFadeRoutine = StartCoroutine(FadeBGM(combatBgmSource, normalBgmSource, fadeDuration));
-
-        isInCombat = inCombat;    
+        {
+            // 脱战
+            fadeCoroutine = StartCoroutine(CrossfadeBGM(combatSource, exploreSource));
+        }
     }
 
-    private System.Collections.IEnumerator FadeBGM(AudioSource fadeOutSource, AudioSource fadeInSource, float duration)
+    private IEnumerator CrossfadeBGM(AudioSource fadeOutSource, AudioSource fadeInSource)
     {
-        float startOutVol = fadeOutSource.volume;
-        float startInVol = fadeInSource.volume;
-        float targetOutVol = 0f;
-        float targetInVol = (fadeInSource == normalBgmSource) ? normalVolume : combatVolume;
+        float timer = 0f;
+        float startFadeOutVol = fadeOutSource.volume;
+        float startFadeInVol = fadeInSource.volume;
 
-        // 淡入开始前：确保淡入音源已经处于“播放”状态（如果是暂停则恢复）
-        if (fadeInSource == normalBgmSource && !normalBgmSource.isPlaying)
+        while (timer < crossfadeDuration)
         {
-            normalBgmSource.UnPause();
-        }
-        else if (fadeInSource != normalBgmSource && !fadeInSource.isPlaying)
-        {
-            fadeInSource.Play();
-        }
+            timer += Time.deltaTime;
+            float t = timer / crossfadeDuration;
 
-        float elapsed = 0f;
-        while (elapsed < duration)
-        {
-            elapsed += Time.unscaledDeltaTime;
-            float t = elapsed / duration;
-            fadeOutSource.volume = Mathf.Lerp(startOutVol, targetOutVol, t);
-            fadeInSource.volume = Mathf.Lerp(startInVol, targetInVol, t);
+            fadeOutSource.volume = Mathf.Lerp(startFadeOutVol, 0f, t);
+            fadeInSource.volume = Mathf.Lerp(startFadeInVol, maxBGMVolume, t);
+
             yield return null;
         }
 
-        fadeOutSource.volume = targetOutVol;
-        fadeInSource.volume = targetInVol;
-        if (targetOutVol == 0) fadeOutSource.Pause();
-
-        // 淡入完成后：强制确保淡入音源正在播放
-        if (fadeInSource == normalBgmSource)
-        {
-            if (!normalBgmSource.isPlaying)
-                normalBgmSource.UnPause();
-        }
-        else
-        {
-            if (!fadeInSource.isPlaying)
-                fadeInSource.Play();
-        }
-
-        Debug.Log($"Fade complete: {fadeInSource.name} volume = {fadeInSource.volume}, isPlaying = {fadeInSource.isPlaying}");
+        // 强行对齐最终音量
+        fadeOutSource.volume = 0f;
+        fadeInSource.volume = maxBGMVolume;
     }
 }

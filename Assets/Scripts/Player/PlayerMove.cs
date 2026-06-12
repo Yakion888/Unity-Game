@@ -235,6 +235,7 @@ public class EldenRingMovement : MonoBehaviour
     public AudioClip ultSlowMotionSFX;      // 空中滞留慢放音效（子弹时间高频耳鸣声）
     public AudioClip ultQTESuccessSFX;      // QTE按键成功音效（清脆的“叮”声，若空则默认用完美闪避音效）
     public AudioClip ultSlamSFX;            // 终结重击砸地音效（沉重的爆炸/砸地声）
+    public AudioClip ultHitSFX;             // 大招刀刃砍进肉里的固定受击音效
 
     [Header("终极大招特效")]
     public GameObject[] ultSlashEffects; // 前 4 段的不同角度剑光
@@ -2223,7 +2224,7 @@ public class EldenRingMovement : MonoBehaviour
         if (ultSlowMotionSFX != null)
         {
            // 直接从音效池里拿一个，并且挂载在玩家身上(transform)跟着走
-            AudioPoolManager.Instance.PlaySound(ultSlowMotionSFX, transform.position, 1.0f, transform);
+            AudioPoolManager.Instance.PlaySound(ultSlowMotionSFX, transform.position, 1.0f, null, true);
         }
 
 
@@ -2269,7 +2270,7 @@ public class EldenRingMovement : MonoBehaviour
         AudioClip clipToPlay = ultQTESuccessSFX != null ? ultQTESuccessSFX : perfectDodgeStartSFX;
         if (clipToPlay != null)
         {
-            AudioPoolManager.Instance.PlaySound(clipToPlay, transform.position, 1.2f, transform);
+            AudioPoolManager.Instance.PlaySound(clipToPlay, transform.position, 0.6f, null, true);
         }
     }
 
@@ -2333,7 +2334,10 @@ public class EldenRingMovement : MonoBehaviour
                     
                     GameObject vfxToUse = ultHitEffect != null ? ultHitEffect : hitEffect;
                     SpawnHitEffect(vfxToUse, sparkPos, attachTarget);
-                    PlayAttackHit(); 
+                    if (ultHitSFX != null) 
+                    {
+                        AudioPoolManager.Instance.PlaySound(ultHitSFX, sparkPos, 1.0f);
+                    } 
                 }
             }
         }
@@ -2389,7 +2393,10 @@ public class EldenRingMovement : MonoBehaviour
 
                     GameObject vfxToUse = ultHitEffect != null ? ultHitEffect : hitEffect;
                     SpawnHitEffect(vfxToUse, sparkPos, attachTarget);
-                    PlayAttackHit(); 
+                    if (ultHitSFX != null) 
+                    {
+                        AudioPoolManager.Instance.PlaySound(ultHitSFX, sparkPos, 1.0f);
+                    }
                 }
             }
         }
@@ -3022,7 +3029,7 @@ public class EldenRingMovement : MonoBehaviour
         // 播放完美闪避启动音效
         if (perfectDodgeStartSFX != null)
         {
-           AudioPoolManager.Instance.PlaySound(perfectDodgeStartSFX, transform.position, 0.8f, transform);
+           AudioPoolManager.Instance.PlaySound(perfectDodgeStartSFX, transform.position, 0.8f, null, true);
         }
 
         // 保存原始时间缩放，避免嵌套慢动作

@@ -29,7 +29,7 @@ public class AudioPoolManager : MonoBehaviour
         audioObj.transform.SetParent(transform);
         AudioSource source = audioObj.AddComponent<AudioSource>();
         
-        // 默认设置：3D音效，无物理变调（多普勒）
+        // 默认设置：无物理变调（多普勒）
         source.spatialBlend = 0.5f;
         source.dopplerLevel = 0f; 
         source.playOnAwake = false;
@@ -39,8 +39,8 @@ public class AudioPoolManager : MonoBehaviour
         return source;
     }
 
-    // 🌟 核心播放方法（支持位置、音量，以及是否跟随某个物体移动）
-    public void PlaySound(AudioClip clip, Vector3 position, float volume = 1.0f, Transform attachParent = null)
+    // 🌟 核心播放方法（注意这里括号里的最后一个参数：bool is2D = false）
+    public void PlaySound(AudioClip clip, Vector3 position, float volume = 1.0f, Transform attachParent = null, bool is2D = false)
     {
         if (clip == null) return;
 
@@ -49,12 +49,17 @@ public class AudioPoolManager : MonoBehaviour
         else source = CreateNewAudioSource(); // 不够用再临时造
 
         source.gameObject.SetActive(true);
-        source.transform.position = position;
         source.clip = clip;
         source.volume = volume;
 
-        // 如果需要声音跟着人走（比如大招滞空）
-        if (attachParent != null)
+        // 【架构核心】：UI 声音强制为纯 2D (0f)，战斗声音强制为 3D (1f)
+        source.spatialBlend = is2D ? 0f : 1f;
+
+        // 如果是 2D 声音，位置无所谓；如果是 3D 声音，设置实际位置
+        if (!is2D) source.transform.position = position;
+
+        // 如果需要声音跟着人走（比如大招滞空）且不是 2D UI声音
+        if (attachParent != null && !is2D)
         {
             source.transform.SetParent(attachParent);
         }
@@ -68,6 +73,9 @@ public class AudioPoolManager : MonoBehaviour
     private IEnumerator ReturnToPool(AudioSource source, float delay)
     {
         yield return new WaitForSeconds(delay);
+
+        // 防御性编程
+        if (source == null) yield break;
 
         source.Stop();
         source.gameObject.SetActive(false);
