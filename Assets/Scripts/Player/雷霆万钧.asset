@@ -10,10 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1ada4827714c7a54c9b0fbbc090c11ea, type: 3}
-  m_Name: "\u72FC\u7684\u672B\u8DEF"
+  m_Name: "\u96F7\u9706\u4E07\u94A7"
   m_EditorClassIdentifier: Assembly-CSharp::WeaponDataSO
-  weaponName: "\u72FC\u7684\u672B\u8DEF"
-  weaponModelPrefab: {fileID: 2353315614565527132, guid: 6b6f46eeb9c0efe4eab880774bf2f923, type: 3}
+  weaponName: "\u96F7\u9706\u4E07\u94A7"
+  weaponModelPrefab: {fileID: 1891836510213813330, guid: c0f598478050d994699ee2d64804f920, type: 3}
   heavyAttackDamage: 0f00000014000000140000002300000032000000
   heavyAttackKnockback:
   - 5
@@ -29,11 +29,11 @@ MonoBehaviour:
   - 18
   heavyAttackRage: 10
   heavyAttackEffects:
-  - {fileID: 5313456068782518071, guid: 50f1354827c77ef4b99c4dca0ee3411d, type: 3}
-  - {fileID: 5313456068782518071, guid: 50f1354827c77ef4b99c4dca0ee3411d, type: 3}
-  - {fileID: 5313456068782518071, guid: 50f1354827c77ef4b99c4dca0ee3411d, type: 3}
-  - {fileID: 5313456068782518071, guid: 50f1354827c77ef4b99c4dca0ee3411d, type: 3}
-  - {fileID: 5313456068782518071, guid: 50f1354827c77ef4b99c4dca0ee3411d, type: 3}
+  - {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+  - {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+  - {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+  - {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+  - {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
   attackSwingSounds:
   - {fileID: 8300000, guid: ec3380259619ea24ab775dc5acf4c973, type: 3}
   - {fileID: 8300000, guid: 458d0bcbd2fa90449b636550bcef834c, type: 3}
@@ -48,11 +48,11 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 32eb1e3cf7889e64da2b3a23a1d2cbd4, type: 3}
   heavyAttackVoices: []
   heavyAttackHitEffects:
-  - {fileID: 3507126538800908265, guid: b8b81f35766ca884dbd7f017291a51bc, type: 3}
-  - {fileID: 3507126538800908265, guid: b8b81f35766ca884dbd7f017291a51bc, type: 3}
-  - {fileID: 3507126538800908265, guid: b8b81f35766ca884dbd7f017291a51bc, type: 3}
-  - {fileID: 3507126538800908265, guid: b8b81f35766ca884dbd7f017291a51bc, type: 3}
-  - {fileID: 3507126538800908265, guid: b8b81f35766ca884dbd7f017291a51bc, type: 3}
+  - {fileID: 3507126538800908265, guid: a77a4875e2764fe4aaa382ef87ccf7ef, type: 3}
+  - {fileID: 3507126538800908265, guid: a77a4875e2764fe4aaa382ef87ccf7ef, type: 3}
+  - {fileID: 3507126538800908265, guid: a77a4875e2764fe4aaa382ef87ccf7ef, type: 3}
+  - {fileID: 3507126538800908265, guid: a77a4875e2764fe4aaa382ef87ccf7ef, type: 3}
+  - {fileID: 3507126538800908265, guid: a77a4875e2764fe4aaa382ef87ccf7ef, type: 3}
   heavyAttackVFXRotations:
   - {x: 20, y: -90, z: 245}
   - {x: 90, y: 0, z: 5}

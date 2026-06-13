@@ -57,16 +57,11 @@ public class MonsterLightningAttack : MonoBehaviour
                     // 3. 判断玩家是否格挡 (在 lightningDamage 前面加上 (int) 强转)
                     if (playerScript.isBlocking)
                     {
-                                    // 1. 生成闪电视觉特效
-                    GameObject lightning = Instantiate(lightningPrefab, hit.point, Quaternion.identity);
-                    Destroy(lightning, 3.0f);
+                        // 1. 生成闪电视觉特效
+                        GameObject lightning = Instantiate(lightningPrefab, hit.point, Quaternion.identity);
+                        Destroy(lightning, 3.0f);
                         playerScript.TakeBlockDamage((int)isBlockinglightningDamage, knockbackDir, lightningPushForce * 0.5f);
                     }
-                    else
-                    {
-                        playerScript.TakeDamage((int)lightningDamage, knockbackDir, lightningPushForce);
-                    }
-
                     Debug.Log("玩家被怪物的闪电大招击中！");
                     break; // 击中主角后跳出循环
                 }

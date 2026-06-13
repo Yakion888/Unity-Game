@@ -52,6 +52,14 @@ PrefabInstance:
       propertyPath: m_Color.r
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 1545345410034538397, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+      propertyPath: m_BoundingSphereOverride.x
+      value: 5.77e-43
+      objectReference: {fileID: 0}
+    - target: {fileID: 1545345410034538397, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+      propertyPath: m_BoundingSphereOverride.y
+      value: 7.1547e-41
+      objectReference: {fileID: 0}
     - target: {fileID: 1550875519835455026, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
       propertyPath: m_Name
       value: Impact_qte
@@ -94,6 +102,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3687264849419212943, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
       propertyPath: InitialModule.startColor.maxColor.r
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7737127389756767729, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+      propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8956421958105168027, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}

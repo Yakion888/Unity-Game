@@ -128,6 +128,12 @@ public class EldenRingMovement : MonoBehaviour
     // ==============================================================
     // 数据驱动架构：当前装备的武器数据包
     // ==============================================================
+    [Header("武器库与挂载")]
+    public Transform weaponMountPoint;          // 拖入你刚才在右手建立的空物体
+    public List<WeaponDataSO> weaponInventory;  // 武器背包（把各种武器数据包拖进来）
+    private GameObject currentWeaponModel;      // 当前生成的武器 3D 模型
+    private int currentWeaponIndex = 0;         // 当前使用的武器索引
+
     [Header("当前装备武器")]
     public WeaponDataSO currentWeapon;
 
@@ -141,6 +147,8 @@ public class EldenRingMovement : MonoBehaviour
     public float[] lightAttackAngle => currentWeapon.lightAttackAngle;
 
     public GameObject[] heavyAttackEffects => currentWeapon.heavyAttackEffects;
+    public GameObject[] heavyAttackHitEffects => currentWeapon.heavyAttackHitEffects;
+    public Vector3[] heavyAttackVFXRotations => currentWeapon.heavyAttackVFXRotations;
     public GameObject[] lightAttackEffects => currentWeapon.lightAttackEffects;
     public GameObject runningAttackEffect => currentWeapon.runningAttackEffect;
 
@@ -338,6 +346,8 @@ public class EldenRingMovement : MonoBehaviour
         audioSource.volume = 1f;
         audioSource.dopplerLevel = 0f;
 
+        EquipWeapon(0);// 游戏开始时，默认装备背包里的第一把武器
+
         // 7. 瞬间重置相机到背后
         GetComponent<PlayerCameraController>().ResetCameraBehindPlayer();
     }
@@ -506,6 +516,12 @@ public class EldenRingMovement : MonoBehaviour
         if (isWaitingForQTE && inputHandler.HeavyAttackInput && !qteSuccess)
         {
             TriggerQTESuccess();
+        }
+
+        // 武器切换
+        if (inputHandler.SwitchWeaponInput && currentState == ActionState.IdleMove)
+        {
+            EquipWeapon(currentWeaponIndex + 1); // 切换到下一把
         }
     }
 
@@ -898,6 +914,57 @@ public class EldenRingMovement : MonoBehaviour
         isProcessingAttackEnd = false;
     }
     
+    // 动态武器切换系统
+    public void EquipWeapon(int index)
+    {
+        if (weaponInventory == null || weaponInventory.Count == 0) return;
+        
+        // 索引越界保护（循环切换）
+        if (index >= weaponInventory.Count) index = 0;
+        if (index < 0) index = weaponInventory.Count - 1;
+
+        currentWeaponIndex = index;
+        currentWeapon = weaponInventory[currentWeaponIndex];
+
+        // 1. 销毁旧的武器模型
+        if (currentWeaponModel != null)
+        {
+            Destroy(currentWeaponModel);
+        }
+
+        // 2. 生成新的武器模型
+        if (currentWeapon.weaponModelPrefab != null && weaponMountPoint != null)
+        {
+            currentWeaponModel = Instantiate(currentWeapon.weaponModelPrefab, weaponMountPoint);
+            // 清零本地坐标和旋转，完美贴合挂载点
+            currentWeaponModel.transform.localPosition = Vector3.zero;
+            currentWeaponModel.transform.localRotation = Quaternion.identity;
+
+            // 强行保持预制体原本的缩放比例，防骨骼干扰！
+            currentWeaponModel.transform.localScale = currentWeapon.weaponModelPrefab.transform.localScale; 
+            // 确保生成后绝对处于激活可见状态！
+            currentWeaponModel.SetActive(true);
+            
+            // 重新绑定剑尖特效点！
+            // 假设你的每个武器模型底下，都有一个叫 "WeaponPoint" 的子物体
+            Transform tip = currentWeaponModel.transform.Find("WeaponPoint");
+            if (tip != null) weaponPoint = tip;
+        }
+
+        // 3. 【核心架构修复：反向同步数据中心】
+        if (PlayerDataManager.Instance != null)
+        {
+            // 告诉数据中心：武器名字和基础攻击力变了！
+            PlayerDataManager.Instance.weaponName = currentWeapon.weaponName;
+            PlayerDataManager.Instance.weaponBaseAttack = currentWeapon.weaponBaseAttack;
+
+            // 强制数据中心重新计算最终的攻击力面板！
+            PlayerDataManager.Instance.RecalculateAttributes(this);
+        }
+
+        //Debug.Log($"已切换武器：{currentWeapon.weaponName}");
+    }
+
 
     // ========== 攻击命中检测 ========== 
     public void CheckAttackHit()
@@ -1024,7 +1091,23 @@ public class EldenRingMovement : MonoBehaviour
                 Vector3 sparkPos = chestPos + (transform.position - enemy.transform.position).normalized * 0.3f;
                 Transform attachTarget = enemy.lockOnPoint != null ? enemy.lockOnPoint : enemy.transform;
 
-                SpawnHitEffect(hitEffect, sparkPos, attachTarget);
+                // 【数据驱动】：根据当前攻击状态，智能选取对应的受击火花
+                GameObject vfxToUse = hitEffect; // 全局保底白字火花
+
+                if (isAttacking && heavyAttackHitEffects != null && currentAttackCombo >= 1 && currentAttackCombo <= heavyAttackHitEffects.Length)
+                {
+                    // 重击时，根据当前是第几段，拿 SO 里配好的对应的重击火花！
+                    vfxToUse = heavyAttackHitEffects[currentAttackCombo - 1];
+                }
+                else if (isLightAttacking && currentWeapon.lightAttackEffects != null && currentWeapon.lightAttackEffects.Length > 0)
+                {
+                    // 轻击时拿轻击的火花 (建议你也给轻击在 SO 里加一个 lightAttackHitEffects 数组，这里为了兼容先这样写)
+                    vfxToUse = hitEffect; 
+                }
+                // 滑行攻击等可以以此类推...
+
+                // 从对象池生成这朵专属火花
+                SpawnHitEffect(vfxToUse, sparkPos, attachTarget);
             
                 // 【音效播放】
                 if (isLightAttacking) PlayLightAttackHit();
@@ -1146,38 +1229,43 @@ public class EldenRingMovement : MonoBehaviour
     }
     
 
-    // =========== 特效系统 ===========
-    // 播放重攻击特效
-    public void SpawnHeavyEffect()
-    {     
+    // ==========================================
+    //  极致优化版：重攻击特效生成
+    // ==========================================
+    // 【架构秘籍】：在动画机打 Event 时，直接传入 int 类型的参数 (0, 1, 2, 3, 4)
+    // 彻底消灭 GetCurrentAnimatorStateInfo 的字符串硬编码！
+    public void SpawnHeavyEffect(int index)
+    {
         if (!isAttacking && !isLightAttacking && !isRunningAttack) return;
+        if (heavyAttackEffects == null || index < 0 || index >= heavyAttackEffects.Length) return;
 
-        if (heavyAttackEffects == null || heavyAttackEffects.Length == 0)
+        GameObject effectPrefab = heavyAttackEffects[index];
+        if (effectPrefab == null || weaponPoint == null) return;
+
+        // 1. 动态限距（防穿模）
+        Vector3 defaultSpawnPos = weaponPoint.position;
+        Vector3 playerChest = transform.position + Vector3.up * 1.2f;
+        Vector3 dirToWeapon = defaultSpawnPos - playerChest;
+        Vector3 finalSpawnPos = defaultSpawnPos;
+
+        if (Physics.SphereCast(playerChest, 0.3f, dirToWeapon.normalized, out RaycastHit hit, dirToWeapon.magnitude, enemyLayer, QueryTriggerInteraction.Ignore))
         {
-            //Debug.LogWarning("heavyAttackEffects 数组为空！");
-            return;
-        } 
-    
-        // 获取当前攻击段数
-        AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(attackLayerIndex);
-        int index = -1;
-    
-        if (stateInfo.IsName("Attack1")) index = 0;
-        else if (stateInfo.IsName("Attack2")) index = 1;
-        else if (stateInfo.IsName("Attack3")) index = 2;
-        else if (stateInfo.IsName("Attack4")) index = 3;
-        else if (stateInfo.IsName("Attack5")) index = 4;
-
-
-
-        if (index >= 0 && index < heavyAttackEffects.Length && heavyAttackEffects[index] != null)
-        {
-            SpawnEffect(heavyAttackEffects[index]);  // 这里应该被调用
+            finalSpawnPos = playerChest + dirToWeapon.normalized * Mathf.Max(0, hit.distance - 0.1f);
         }
-        else
+
+        // 2. 数据驱动的特效旋转
+        Quaternion spawnRot = weaponPoint.rotation;
+        if (heavyAttackVFXRotations != null && index < heavyAttackVFXRotations.Length)
         {
-            //Debug.LogWarning($"无法播放特效 - 索引:{index}, 数组长度:{heavyAttackEffects.Length}");
+            // 从 SO 数据包中动态读取欧拉角进行旋转
+            spawnRot *= Quaternion.Euler(heavyAttackVFXRotations[index]);
         }
+
+        // 3. 对象池生成
+        GameObject effect = VFXPoolManager.Instance.SpawnFromPool(effectPrefab, finalSpawnPos, spawnRot);
+        effect.SetActive(false);
+        effect.SetActive(true);
+        StartCoroutine(DelayedPlay(effect));
     }
 
     // 播放轻攻击特效
@@ -1255,7 +1343,9 @@ public class EldenRingMovement : MonoBehaviour
             finalSpawnPos = playerChest + dirToWeapon.normalized * Mathf.Max(0, hit.distance - 0.1f);
         }
 
-        Quaternion spawnRot = GetAttackRotation();
+        // 轻击和滑行特效直接使用剑尖的默认旋转即可
+        // 彻底抛弃被删除的 GetAttackRotation 硬编码方法
+        Quaternion spawnRot = weaponPoint.rotation;
         
         // 【重构】：用对象池拿取
         GameObject effect = VFXPoolManager.Instance.SpawnFromPool(effectPrefab, finalSpawnPos, spawnRot);
@@ -1263,45 +1353,6 @@ public class EldenRingMovement : MonoBehaviour
         effect.SetActive(false);
         effect.SetActive(true);
         StartCoroutine(DelayedPlay(effect));
-    }
-
-    // 根据攻击段数获取特效旋转
-    private Quaternion GetAttackRotation()
-    {
-        AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(attackLayerIndex);
-    
-        // 第一段攻击：从右上45度向左下挥动
-        if (stateInfo.IsName("Attack1"))
-        {
-            // 旋转参数说明：
-            // X: -35 让特效向前倾斜（配合挥砍方向）
-            // Y: -90 让特效面向攻击方向
-            // Z: 45 让特效呈45度角（右上到左下）
-            return weaponPoint.rotation * Quaternion.Euler(20, -90, 245);
-        }
-        // 第二段攻击
-        if (stateInfo.IsName("Attack2"))
-        {
-            return weaponPoint.rotation * Quaternion.Euler(90, 0, 5);
-        }   
-        // 第三段攻击
-        if (stateInfo.IsName("Attack3"))
-        {
-            
-            return weaponPoint.rotation * Quaternion.Euler(20, -30, -45);
-        }
-        // 第四段攻击
-        if (stateInfo.IsName("Attack4"))
-        {
-            return weaponPoint.rotation * Quaternion.Euler(90, 0, 0);
-        }
-        // 第五段攻击
-        if (stateInfo.IsName("Attack5"))
-        {
-            return weaponPoint.rotation * Quaternion.Euler(80, -20, 0);
-        }
-        // 其他攻击段数暂时保持默认
-        return weaponPoint.rotation;
     }
 
     // ==========================================
@@ -1693,7 +1744,7 @@ public class EldenRingMovement : MonoBehaviour
         {
             currentHealth -= finalDamage*0.6f;
             if (healthSlider != null) healthSlider.value = currentHealth;
-            Debug.Log("施法霸体，已承受伤害但免疫受击硬直！");
+            //Debug.Log("施法霸体，已承受伤害但免疫受击硬直！");
             if (currentHealth <= 0) Die();     
             return;
         }
@@ -1766,7 +1817,7 @@ public class EldenRingMovement : MonoBehaviour
     // 技能伤害方法（供动画事件调用）
     public void CastDamage()
     {
-        Debug.Log("大招裂地剑气触发！");
+        //Debug.Log("大招裂地剑气触发！");
 
         // 1. 计算出本次大招的【总真实伤害】
         float scaledBonusDamage = attackPowerBonus * castDamageScalingMultiplier;
@@ -1973,7 +2024,7 @@ public class EldenRingMovement : MonoBehaviour
         if (Time.unscaledTime - lastEventTime < 0.1f) return;
         lastEventTime = Time.unscaledTime;
 
-        Debug.Log("第五段击飞判定触发");
+        //Debug.Log("第五段击飞判定触发");
 
         // 垂直升龙剑光独立生成！
         if (ultLaunchEffect != null)

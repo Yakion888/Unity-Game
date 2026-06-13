@@ -6,6 +6,8 @@ public class WeaponDataSO : ScriptableObject
 {
     [Header("基本信息")]
     public string weaponName = "狼的末路";
+    public float weaponBaseAttack = 40f; // 这把武器的初始攻击力
+    public GameObject weaponModelPrefab; //武器的 3D 模型预制体
 
     [Header("重攻击配置 (5段)")]
     public int[] heavyAttackDamage = new int[5] { 15, 20, 20, 35, 50 };
@@ -16,6 +18,16 @@ public class WeaponDataSO : ScriptableObject
     public AudioClip[] attackSwingSounds;
     public AudioClip[] attackHitSounds;
     public AudioClip[] heavyAttackVoices;
+
+    // 为每一段攻击配置不同的受击火花（比如第5下大爆点）
+    public GameObject[] heavyAttackHitEffects;
+    public Vector3[] heavyAttackVFXRotations = new Vector3[5] {
+        new Vector3(20, -90, 245),
+        new Vector3(90, 0, 5),
+        new Vector3(20, -30, -45),
+        new Vector3(90, 0, 0),
+        new Vector3(80, -20, 0)
+    }; 
 
     [Header("轻攻击配置 (3段)")]
     public int[] lightAttackDamage = new int[3] { 10, 12, 15 };

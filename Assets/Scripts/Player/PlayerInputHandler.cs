@@ -16,6 +16,7 @@ public class PlayerInputHandler : MonoBehaviour
     public bool SkillInput { get; private set; }
     public bool UltimateInput { get; private set; }
     public bool LockOnInput { get; private set; }
+    public bool SwitchWeaponInput { get; private set; }
 
     // 临时获取主脚本的状态，用于在死亡或打开UI时强行锁死输入
     private EldenRingMovement playerState;
@@ -51,6 +52,7 @@ public class PlayerInputHandler : MonoBehaviour
         
         SkillInput = Input.GetKeyDown(KeyCode.Alpha1);
         UltimateInput = Input.GetKeyDown(KeyCode.Alpha2);
+        SwitchWeaponInput = Input.GetKeyDown(KeyCode.Tab);
     }
 
     // 强行清空所有输入
@@ -66,5 +68,6 @@ public class PlayerInputHandler : MonoBehaviour
         SkillInput = false;
         UltimateInput = false;
         LockOnInput = false;
+        SwitchWeaponInput = false;
     }
 }
