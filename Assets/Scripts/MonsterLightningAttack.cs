@@ -7,7 +7,7 @@ public class MonsterLightningAttack : MonoBehaviour
 
     [Header("闪电伤害配置")]
     public float lightningDamage = 35f;    // 这里保持 float 也没关系了
-    public float isBlockinglightningDamage = 0f; 
+    public float isBlockinglightningDamage = 20f; 
     public float lightningRadius = 2.5f;   // 闪电轰炸的波及半径
     public float lightningPushForce = 15f; // 闪电爆炸击退力
 
@@ -37,9 +37,7 @@ public class MonsterLightningAttack : MonoBehaviour
 
         if (Physics.Raycast(rayStartPos, Vector3.down, out RaycastHit hit, 40f))
         {
-            // 1. 生成闪电视觉特效
-            GameObject lightning = Instantiate(lightningPrefab, hit.point, Quaternion.identity);
-            Destroy(lightning, 3.0f);
+
 
             // ============ 2. 对接你的 EldenRingMovement 逻辑 ============
             
@@ -59,6 +57,9 @@ public class MonsterLightningAttack : MonoBehaviour
                     // 3. 判断玩家是否格挡 (在 lightningDamage 前面加上 (int) 强转)
                     if (playerScript.isBlocking)
                     {
+                                    // 1. 生成闪电视觉特效
+                    GameObject lightning = Instantiate(lightningPrefab, hit.point, Quaternion.identity);
+                    Destroy(lightning, 3.0f);
                         playerScript.TakeBlockDamage((int)isBlockinglightningDamage, knockbackDir, lightningPushForce * 0.5f);
                     }
                     else
