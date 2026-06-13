@@ -13,8 +13,7 @@ public class AudioPoolManager : MonoBehaviour
 
     private void Awake()
     {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
+        Instance = this;
 
         // 游戏启动时，一次性创建好一堆 AudioSource 备用
         for (int i = 0; i < initialPoolSize; i++)
