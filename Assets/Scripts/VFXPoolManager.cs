@@ -12,8 +12,8 @@ public class VFXPoolManager : MonoBehaviour
 
     private void Awake()
     {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
+        // 强行覆盖单例：每次进入新场景，都以最新的管家为准
+        Instance = this;
     }
 
     // 从池子中获取特效（代替 Instantiate）

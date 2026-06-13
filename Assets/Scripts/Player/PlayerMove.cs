@@ -6,40 +6,7 @@ using UnityEngine.Animations.Rigging; // 引入动画绑定库
 
 public class EldenRingMovement : MonoBehaviour
 {
-    [Header("移动速度")]
-    public float walkSpeed = 2f;
-    public float runSpeed = 5f;
-    public float sprintSpeed = 5f;
-    public float acceleration = 10f;
-    public float deceleration = 15f;
-
-    [Header("跳跃与重力设置")]
-    public float jumpHeight = 1.5f;           // 跳跃高度
-    public float jumpStaminaCost = 15f;       // 跳跃消耗耐力
-    public float gravityMultiplier = 2.5f;    // 下落时的重力倍增（动作游戏标配，消除轻飘飘的感觉）
-    public float terminalVelocity = -30f;     // 终端速度（最大下落速度限制）
-    private bool isJumping;
-    private float jumpStartSpeed = 0f;
-    
-    [Header("旋转设置")]
-    public float rotationSpeed = 540f;
-    public float idleRotationSpeed = 360f;
-    
-
-    // ======= 锁定系统 =======
-    [Header("锁定设置")]
-    public float lockOnRadius = 20f;      // 搜索敌人的半径
-    public LayerMask enemyLayer;          // 敌人所在的图层
-    public Transform lockedTarget;        // 当前锁定的目标
-    public bool isLockedOn;               // 是否处于锁定状态
-
-    // ======= 锁定UI =======
-    [Header("锁定UI设置")]
-    public RectTransform lockOnUI;        // 拖入你的锁定图标 (Image的RectTransform)
-    
-    [Header("急停设置")]
-    public float stopAnimationDuration = 0.5f;
-    
+   
     // ==============================================================
     // 架构：有限状态机 (FSM)
     // ==============================================================
@@ -86,24 +53,6 @@ public class EldenRingMovement : MonoBehaviour
 
     [Header("1技能音效效")]
     public AudioClip castSound;                // 施法音效
-
-    // 玩家 UI 引用
-    [Header("玩家UI设置")]
-    public Slider healthSlider;
-    public Slider staminaSlider;
-    public Slider rageSlider;
-    // 【新增】UI数值文本引用
-    public TMPro.TextMeshProUGUI healthText;
-    public TMPro.TextMeshProUGUI staminaText;
-    public TMPro.TextMeshProUGUI rageText;
-    // 用来记录上一帧数值，防止每帧重复刷新文字导致卡顿
-    private int lastHealth = -1;
-    private int lastStamina = -1;
-    private int lastRage = -1;
-
-    [Header("怒气系统")]
-    public float maxRage = 100f;               // 最大怒气值
-    public float currentRage = 0f;             // 当前怒气值
 
     [Header("转场与表现")]
     public CanvasGroup fadeCanvasGroup;  // 拖入刚才做的 FadeBlackScreen
@@ -155,19 +104,7 @@ public class EldenRingMovement : MonoBehaviour
     public float upgradeAttackBonus=> PlayerDataManager.Instance.upgradeAttackBonus;
 
     public int GetXPRequirementForNextLevel() => PlayerDataManager.Instance.GetXPRequirementForNextLevel();
-
-    [Header("生命值系统")]
-    //public float maxHealth = 300f;           // 最大生命值
-    public float currentHealth;              // 当前生命值
     
-
-    [Header("耐力系统")]
-    //public float maxStamina = 300f;           // 最大耐力
-    public float currentStamina;              // 当前耐力
-    public float staminaRegenRate = 15f;      // 每秒恢复速度
-    public float staminaRegenDelay = 1f;      // 停止消耗后多久开始恢复
-    private float staminaRegenTimer = 0f;     // 恢复延迟计时器
-
     [Header("技能系统")]
     public int castDamage = 100;
     public float castDuration = 3.0f;  // 施法动画时长
@@ -245,12 +182,6 @@ public class EldenRingMovement : MonoBehaviour
     public GameObject ultHitEffect;
 
 
-    [Header("耐力消耗")]
-    public float sprintStaminaCost = 25f;         // 奔跑每秒消耗
-    // 耐力耗尽禁止奔跑系统
-    private float staminaBlockRemaining = 0f;
-    private const float STAMINA_BLOCK_DURATION = 1.5f;  // 可改为 public 以便在 Inspector 调整
-
     [Header("闪避设置")]
     public float dodgeDistance = 3f;           // 闪避位移距离
     public float dodgeDuration = 0.4f;         // 闪避动画时长/无敌时长
@@ -267,30 +198,24 @@ public class EldenRingMovement : MonoBehaviour
     public AudioClip[] skillVoices;         // 技能语音数组（可选）
     public AudioClip deathSFX;              // 死亡语音
 
-    [Header("草地脚步声")]
-    public AudioClip[] grassFootsteps;        // 行走单步采样数组
 
     [Header("战斗音乐冷却")]
     public float combatCooldownDuration = 2f;   // 脱战冷却时间（秒）
     private float combatCooldownTimer = 0f;
     private bool isInCombatEffective = false;   // 经过冷却过滤后的实际战斗状态
-    
-    // 移动相关
-    private Vector2 moveInput;
-    private float currentSpeed;
-    private bool isRunning;
-    private float stopStartTime;
-    private float lastSpeed;
-    private bool wasMoving;
 
-    // 重力相关
-    private float verticalVelocity;
-    private float gravity = -9.81f;
-    private float airTimer = 0f; //// 悬空计时器（用于解决上下楼梯时的重力防抖）
+    // ======= 锁定系统 =======
+    [Header("锁定设置")]
+    public float lockOnRadius = 20f;
+    public LayerMask enemyLayer;
+    public Transform lockedTarget;
+    public bool isLockedOn;
+
+    [Header("锁定UI设置")]
+    public RectTransform lockOnUI;
     
     
     // 攻击相关
-    private int attackLayerIndex;
     private bool comboPending;
     private float comboPendingTime;
     private bool isProcessingAttackEnd;
@@ -303,35 +228,51 @@ public class EldenRingMovement : MonoBehaviour
     private float castStartTime;
     private bool isCastingInvincible;   // 施法霸体状态
 
-
     
     // 受击相关
     private float hitRecoveryTime;
-    private Vector3 impact;
+    public Vector3 impact;
+    
+    private PlayerLocomotionManager locomotion; // 物理移动引擎
     
     // 动画相关
-    private Animator anim;
+    private PlayerAnimatorHandler animHandler; //动画管家
+    // 让底层成百上千行的攻击逻辑、动画事件，以为 anim 还在自己身上！
+    public Animator anim => animHandler.anim;
+    public int attackLayerIndex => animHandler.attackLayerIndex;
+
     private CharacterController controller;
     private Quaternion targetRotation;
     private float currentTurnAngle;
 
-    // 急停相关状态控制
-    private bool isStopping;
-    private float stopTimer;
-    private bool wasRunning;
 
-    // 脚步声相关
-    private AudioSource footstepSource;       // 脚步音源
-    private float footstepTimer = 0f;         // 脚步计时器
-    private float walkInterval = 0.5f;        // 行走脚步间隔（秒）
-    private float runInterval = 0.3f;         // 奔跑脚步间隔（秒）
+    private PlayerStatsManager stats; // 状态与UI管家
+    // ==============================================================
+    //  代理：读写双向绑定，主脚本完美操控新管家的数据
+    // ==============================================================
+    public float currentHealth { get => stats.currentHealth; set => stats.currentHealth = value; }
+    public float currentStamina { get => stats.currentStamina; set => stats.currentStamina = value; }
+    public float currentRage { get => stats.currentRage; set => stats.currentRage = value; }
+    public float maxRage => stats.maxRage;
+    
+    public float staminaBlockRemaining { get => stats.staminaBlockRemaining; set => stats.staminaBlockRemaining = value; }
+    public float staminaRegenTimer { get => stats.staminaRegenTimer; set => stats.staminaRegenTimer = value; }
+    public float staminaRegenBuffTimer { get => stats.staminaRegenBuffTimer; set => stats.staminaRegenBuffTimer = value; }
+    public float sprintStaminaCost => stats.sprintStaminaCost;
+    public float STAMINA_BLOCK_DURATION => stats.STAMINA_BLOCK_DURATION;
+
+    public Slider healthSlider => stats.healthSlider;
+    public Slider staminaSlider => stats.staminaSlider;
+    public Slider rageSlider => stats.rageSlider;
+
+    public bool ConsumeStamina(float amount) => stats.ConsumeStamina(amount);
+
 
     // 闪避增强机制
     private bool isInvincible = false;          // 是否处于无敌状态
     private float dodgeStartTime = 0f;          // 闪避开始的时间戳
     private bool nextAttackIsCrit = false;      // 下一次攻击是否必定暴击
     private bool nextHeavyAttackIsFourth = false;   // 下一次重击是否直接变成第四段
-    private float staminaRegenBuffTimer = 0f;   // 耐力恢复加速剩余时间
 
     //战斗状态缓存
     private bool isInCombatCached = false;
@@ -345,78 +286,59 @@ public class EldenRingMovement : MonoBehaviour
     private bool isCurrentlyRunning;
     private Vector3 targetMoveDirection;
     private bool isGroundedCached;
+    private PlayerInputHandler inputHandler; 
     
     void Start()
     {
-        anim = GetComponent<Animator>();
+        // ==========================================
+        // 1. 【核心修复】：必须最先抓取所有管家组件！
+        // 否则后续读档、赋值时会报 NullReferenceException 卡死游戏！
+        // ==========================================
+        inputHandler = GetComponent<PlayerInputHandler>(); 
+        animHandler = GetComponent<PlayerAnimatorHandler>();
+        stats = GetComponent<PlayerStatsManager>();
+        
+        // 初始化动画管家
+        animHandler.Initialize();
+
+        // 2. 必须先抓取 controller，再传给管家
         controller = GetComponent<CharacterController>();
 
-        // ======= 初始化UI隐藏 =======
+        //初始化物理引擎
+        locomotion = GetComponent<PlayerLocomotionManager>();
+        locomotion.Initialize(this, inputHandler, animHandler, stats, controller);
+
+        // 3. UI与鼠标设置
         if (lockOnUI != null) lockOnUI.gameObject.SetActive(false);
-        
-        
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
         
-        if (anim != null)
-        {
-            attackLayerIndex = anim.GetLayerIndex("AttackLayer");
-            if (attackLayerIndex >= 0)
-            {
-                anim.SetLayerWeight(attackLayerIndex, 0f);
-            }
-        }
-        
-        PlayerDataManager.Instance.LoadGame(this); // 让数据中心全权接管读档
+        // ==========================================
+        // 4. 数据中心接管与初始化
+        // ==========================================
+        PlayerDataManager.Instance.LoadGame(this); 
 
         // 读完档算出真正的最大血量后，再把当前血量和耐力回满
         currentStamina = maxStamina;
         currentHealth = maxHealth;
         currentRage = 0f; 
 
-        // 初始化 UI 面板
-        if (healthSlider != null)
-        {
-            healthSlider.maxValue = maxHealth;
-            healthSlider.value = currentHealth;
-        }
-        if (staminaSlider != null)
-        {
-            staminaSlider.maxValue = maxStamina;
-            staminaSlider.value = currentStamina;
-        }
-        if (rageSlider != null)
-        {
-            rageSlider.maxValue = maxRage;
-            rageSlider.value = currentRage;
-        }
+        // 5. 初始化滑动条的最大值 (Slider Max Values)
+        if (healthSlider != null) healthSlider.maxValue = maxHealth;
+        if (staminaSlider != null) staminaSlider.maxValue = maxStamina;
+        if (rageSlider != null) rageSlider.maxValue = maxRage;
 
-        // 创建独立的脚步AudioSource（可选，便于单独控制音量）
-        footstepSource = gameObject.AddComponent<AudioSource>();
-        footstepSource.spatialBlend = 0.5f;
-        footstepSource.volume = 0.6f;
-
-        // 🎵 动态加载草地脚步声（从 Resources 文件夹）
-        LoadGrassFootsteps();
         
-        // 初始化音效系统
         if (audioSource == null)
         {
             audioSource = GetComponent<AudioSource>();
-            if (audioSource == null)
-            {
-                audioSource = gameObject.AddComponent<AudioSource>();
-            }
+            if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
         }
         audioSource.spatialBlend = 0.5f;
         audioSource.volume = 1f;
-        
-        // 彻底关闭玩家主音源的物理变调，保证所有打击声、挥刀声纯净无比！
         audioSource.dopplerLevel = 0f;
 
-        Debug.Log($"相机前向: {Camera.main.transform.forward}");
-
-        // 游戏启动的第一帧，强行把相机拉回主角宽阔的后背！
+        // 7. 瞬间重置相机到背后
         GetComponent<PlayerCameraController>().ResetCameraBehindPlayer();
     }
     
@@ -432,7 +354,7 @@ public class EldenRingMovement : MonoBehaviour
 
 
         // 4. 处理移动、重力与跳跃
-        HandleLocomotionAndGravity();
+        locomotion.HandleLocomotionAndGravity();
 
         // 5. 处理战斗输入（攻击、技能、闪避、格挡）
         HandleActionInputs();
@@ -497,146 +419,29 @@ public class EldenRingMovement : MonoBehaviour
 
     private void ReadPlayerInput()
     {
-        hInput = isUIOpen ? 0f : Input.GetAxisRaw("Horizontal");
-        vInput = isUIOpen ? 0f : Input.GetAxisRaw("Vertical");
-        runInput = isUIOpen ? false : Input.GetKey(KeyCode.LeftShift);
+        // 直接从输入管家读取，抛弃旧变量
+        hInput = inputHandler.MoveInput.x;
+        vInput = inputHandler.MoveInput.y;
+        runInput = inputHandler.RunInput;
 
-        if (Mathf.Abs(hInput) < 0.1f) hInput = 0;
-        if (Mathf.Abs(vInput) < 0.1f) vInput = 0;
-
-        moveInput = new Vector2(hInput, vInput).normalized;
-
-        hasMoveInput = moveInput.magnitude > 0.1f && !isAttacking && !isLightAttacking && !isBlocking && !isHit && !isCasting && !isDodging;
+        hasMoveInput = inputHandler.MoveInput.magnitude > 0.1f && !isAttacking && !isLightAttacking && !isBlocking && !isHit && !isCasting && !isDodging;
         isCurrentlyRunning = runInput && hasMoveInput && Mathf.Abs(vInput) > 0.1f;
     }
 
 
-    private void HandleLocomotionAndGravity()
-    {
-        // 计算移动方向
-        targetMoveDirection = Vector3.zero;
-        if (hasMoveInput)
-        {
-            Vector3 camForward = Camera.main.transform.forward;
-            camForward.y = 0f;
-            camForward.Normalize();
-            Vector3 camRight = Camera.main.transform.right;
-            camRight.y = 0f;
-            camRight.Normalize();
-            targetMoveDirection = (camForward * moveInput.y + camRight * moveInput.x).normalized;
-        }
-
-        // 计算目标速度
-        float targetSpeed = 0f;
-        if (hasMoveInput && !isAttacking && !isLightAttacking && !isUltimateCasting && !isCasting)
-        {
-            targetSpeed = runInput ? runSpeed : walkSpeed;
-        }
-        float accel = hasMoveInput ? acceleration : deceleration;
-        currentSpeed = Mathf.MoveTowards(currentSpeed, targetSpeed, accel * Time.deltaTime);
-        if (isUltimateCasting || isCasting) currentSpeed = 0f;
-
-        // 处理旋转
-        if (isLockedOn && lockedTarget != null)
-        {
-            Vector3 dirToTarget = lockedTarget.position - transform.position;
-            dirToTarget.y = 0;
-            if (dirToTarget != Vector3.zero)
-            {
-                float rotSpeed = (isAttacking || isLightAttacking || isUltimateCasting || isCasting) ? rotationSpeed * 0.2f : rotationSpeed;
-                targetRotation = Quaternion.LookRotation(dirToTarget);
-                transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, rotSpeed * Time.deltaTime);
-            }
-        }
-        else if (hasMoveInput && targetMoveDirection.magnitude > 0.1f && (!isAttacking && !isLightAttacking || isUltimateCasting || isCasting))
-        {
-            targetRotation = Quaternion.LookRotation(targetMoveDirection);
-            float currentRotSpeed = (isUltimateCasting || isCasting) ? rotationSpeed * 0.4f : (isRunning ? rotationSpeed : rotationSpeed * 0.8f);
-            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, currentRotSpeed * Time.deltaTime);
-            float angle = Vector3.SignedAngle(transform.forward, targetMoveDirection, Vector3.up);
-            currentTurnAngle = Mathf.Lerp(currentTurnAngle, Mathf.Clamp(angle / 90f, -1f, 1f), Time.deltaTime * 10f);
-        }
-        else if (!hasMoveInput && !isAttacking && !isLightAttacking && !isUltimateCasting)
-        {
-            targetRotation = Quaternion.LookRotation(transform.forward);
-            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, idleRotationSpeed * Time.deltaTime);
-            currentTurnAngle = Mathf.Lerp(currentTurnAngle, 0f, Time.deltaTime * 5f);
-        }
-
-        // 处理重力与跳跃
-        isGroundedCached = IsGrounded();
-        if (isGroundedCached)
-        {
-            airTimer = 0f;
-            isJumping = false;
-            if (verticalVelocity < 0) verticalVelocity = -1.5f;
-        }
-        else
-        {
-            airTimer += Time.deltaTime;
-        }
-
-        if (Input.GetButtonDown("Jump") && isGroundedCached && !isAttacking && !isLightAttacking && !isCasting && !isHit && !isBlocking)
-        {
-            if (ConsumeStamina(jumpStaminaCost))
-            {
-                verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
-                isJumping = true;
-                jumpStartSpeed = Mathf.Clamp01(currentSpeed / runSpeed);
-                anim.SetFloat("Speed", jumpStartSpeed);
-                anim.SetFloat("Direction", 0f);
-                anim.SetBool("IsMoving", false);
-                anim.SetTrigger("Jump");
-            }
-        }
-
-        if (!isGroundedCached)
-        {
-            if (verticalVelocity < 0 && airTimer > 0.15f) verticalVelocity += gravity * gravityMultiplier * Time.deltaTime;
-            else verticalVelocity += gravity * Time.deltaTime;
-        }
-        verticalVelocity = Mathf.Max(verticalVelocity, terminalVelocity);
-
-        // 应用最终位移
-        if (controller != null && controller.enabled)
-        {
-            Vector3 horizontalVelocity = Vector3.zero;
-            if (isCasting)
-            {
-                moveInput = Vector2.zero;
-                isRunning = false;
-                currentSpeed = 0f;
-                UpdateAnimation(false);
-            }
-            else if (isUltimateCasting) horizontalVelocity = Vector3.zero;
-            else if (targetMoveDirection.magnitude > 0.1f && !isAttacking && !isLightAttacking)
-            {
-                horizontalVelocity = targetMoveDirection * currentSpeed;
-                lastSpeed = currentSpeed;
-            }
-
-            if (impact.magnitude > 0.1f)
-            {
-                horizontalVelocity += impact;
-                impact = Vector3.Lerp(impact, Vector3.zero, Time.deltaTime * 10f);
-            }
-
-            Vector3 finalVelocity = horizontalVelocity + new Vector3(0, verticalVelocity, 0);
-            controller.Move(finalVelocity * Time.deltaTime);
-        }
-    }
+    
 
     private void HandleActionInputs()
     {
         // 闪避
-        if (Input.GetKeyDown(KeyCode.F) && !isUIOpen && !isDodging && !isAttacking && !isLightAttacking && !isCasting && !isHit && !isBlocking)
+        if (inputHandler.DodgeInput && !isDodging && !isAttacking && !isLightAttacking && !isCasting && !isHit && !isBlocking)
         {
             TryDodge();
         }
 
         // 格挡
         bool wasBlocking = isBlocking;
-        isBlocking = Input.GetKey(KeyCode.LeftControl);
+        isBlocking = inputHandler.BlockInput;
         if (isBlocking != wasBlocking)
         {
             if (isBlocking) GetComponent<IdleSelector>()?.ResetIdleTimer();
@@ -649,7 +454,7 @@ public class EldenRingMovement : MonoBehaviour
         anim.SetBool("IsBlocking", isBlocking);
 
         // 攻击
-        if (Input.GetMouseButtonDown(0) && !isUIOpen && !isBlocking && !isHit && !isDodging && !isCasting && !isUltimateCasting)
+        if (inputHandler.HeavyAttackInput && !isBlocking && !isHit && !isDodging && !isCasting && !isUltimateCasting)
         {
             if (!isAttacking && !isLightAttacking && !isRunningAttack)
             {
@@ -666,7 +471,7 @@ public class EldenRingMovement : MonoBehaviour
                 }
             }
         }
-        else if (Input.GetMouseButtonDown(1) && !isBlocking && !isHit && !isDodging && !isCasting)
+        else if (inputHandler.LightAttackInput && !isBlocking && !isHit && !isDodging && !isCasting)
         {
             if (!isAttacking && !isLightAttacking && !isRunningAttack) StartLightAttack();
             else if (isLightAttacking)
@@ -681,7 +486,7 @@ public class EldenRingMovement : MonoBehaviour
         }
 
         // 技能
-        if (Input.GetKeyDown(KeyCode.Alpha1) && !isUIOpen && !isAttacking && !isLightAttacking && !isBlocking && !isHit && !isCasting)
+        if (inputHandler.SkillInput && !isAttacking && !isLightAttacking && !isBlocking && !isHit && !isCasting)
         {
             if (currentRage >= maxRage)
             {
@@ -692,13 +497,13 @@ public class EldenRingMovement : MonoBehaviour
         }
 
         // 大招
-        if (Input.GetKeyDown(KeyCode.Alpha2) && !isUIOpen && !isAttacking && !isLightAttacking && !isBlocking && !isHit && !isCasting && !isUltimateCasting)
+        if (inputHandler.UltimateInput && !isAttacking && !isLightAttacking && !isBlocking && !isHit && !isCasting && !isUltimateCasting)
         {
             StartUltimate();
         }
 
         // QTE
-        if (isWaitingForQTE && Input.GetMouseButtonDown(0) && !qteSuccess)
+        if (isWaitingForQTE && inputHandler.HeavyAttackInput && !qteSuccess)
         {
             TriggerQTESuccess();
         }
@@ -706,32 +511,8 @@ public class EldenRingMovement : MonoBehaviour
 
     private void HandleStatsAndTimers()
     {
-        // 同步状态变量
-        bool wasMovingPrev = wasMoving;
-        bool wasRunningPrev = wasRunning;
-        isRunning = runInput && hasMoveInput && (Mathf.Abs(vInput) > 0.1f || Mathf.Abs(hInput) > 0.1f);
-        wasMoving = hasMoveInput;
-        wasRunning = isRunning;
-
-        // 急停逻辑
-        if (wasMovingPrev && !hasMoveInput && wasRunningPrev)
-        {
-            isStopping = true;
-            stopTimer = stopAnimationDuration;
-        }
-
-        if (isStopping)
-        {
-            if (hasMoveInput || isAttacking || isLightAttacking || isDodging || isJumping || isCasting || isHit || isBlocking)
-            {
-                isStopping = false;
-            }
-            else
-            {
-                stopTimer -= Time.deltaTime;
-                if (stopTimer <= 0) isStopping = false;
-            }
-        }
+        // 交给物理引擎处理急停判定
+        locomotion.HandleStopTimers(hasMoveInput);
 
         // 连击计时
         if (comboPendingTime > 0)
@@ -745,76 +526,46 @@ public class EldenRingMovement : MonoBehaviour
             if (lightComboPendingTime <= 0) lightComboPending = false;
         }
 
-        // 动画状态与UI同步
-        anim.SetBool("IsGrounded", isGroundedCached);
-        UpdateAnimation(hasMoveInput);
-        if (anim != null)
-        {
-            anim.SetBool("IsMoving", hasMoveInput && !isAttacking && !isLightAttacking && !isUltimateCasting);
-            anim.SetBool("IsRunning", isRunning);
-            anim.SetBool("IsStopping", isStopping);
-        }
+        // 动画状态与UI同步 (读取物理引擎算好的数据)
+        animHandler.SyncLocomotionStates(hasMoveInput, locomotion.isRunning, locomotion.isGroundedCached, locomotion.isStopping, isAttacking, isLightAttacking, isUltimateCasting);
+        UpdateAnimationValues(hasMoveInput);
 
         // 耐力与奔跑耗能逻辑
-        if (staminaBlockRemaining > 0f)
+        if (stats.staminaBlockRemaining > 0f)
         {
-            staminaBlockRemaining -= Time.deltaTime;
-            isRunning = false;
-            if (currentSpeed > walkSpeed) currentSpeed = walkSpeed;
+            stats.staminaBlockRemaining -= Time.deltaTime;
+            // 强行锁死奔跑
+            locomotion.ResetSpeed(); 
         }
-        else if (isRunning && hasMoveInput && !isAttacking && !isLightAttacking && !isCasting && isInCombatCached)
+        else if (locomotion.isRunning && hasMoveInput && !isAttacking && !isLightAttacking && !isCasting && isInCombatCached)
         {
-            float sprintCost = sprintStaminaCost * Time.deltaTime;
+            float sprintCost = stats.sprintStaminaCost * Time.deltaTime;
             if (currentStamina >= sprintCost)
             {
                 currentStamina -= sprintCost;
-                staminaRegenTimer = 0f;
+                stats.staminaRegenTimer = 0f;
             }
             else
             {
-                staminaBlockRemaining = STAMINA_BLOCK_DURATION;
-                isRunning = false;
-                currentSpeed = walkSpeed;
+                stats.staminaBlockRemaining = stats.STAMINA_BLOCK_DURATION;
+                locomotion.ResetSpeed();
             }
         }
 
-        // 耐力恢复
-        if (!isInCombatCached || (!isRunning && !isAttacking && !isLightAttacking))
+        if (!isInCombatCached || (!locomotion.isRunning && !isAttacking && !isLightAttacking))
         {
-            staminaRegenTimer += Time.deltaTime;
-            RegenerateStamina();
+            stats.staminaRegenTimer += Time.deltaTime;
+            stats.RegenerateStamina(maxStamina); 
         }
 
-        if (staminaSlider != null) staminaSlider.value = currentStamina;
-        if (!isDead && rageSlider != null) rageSlider.value = currentRage;
-        
-        UpdateUIBarTexts();
+        stats.UpdateUIBarTexts(maxHealth, maxStamina);
     }
 
     private void HandleAudioAndIK()
     {
-        // 脚步声
-        bool isMovingOnGround = isGroundedCached && hasMoveInput && !isAttacking && !isLightAttacking && !isCasting && !isUltimateCasting && !isDodging && !isHit && !isJumping;
-        if (isMovingOnGround)
-        {
-            float interval = isRunning ? runInterval : walkInterval;
-            footstepTimer += Time.deltaTime;
-            if (footstepTimer >= interval)
-            {
-                footstepTimer = 0f;
-                if (grassFootsteps != null && grassFootsteps.Length > 0)
-                {
-                    int idx = Random.Range(0, grassFootsteps.Length);
-                    float originalPitch = footstepSource.pitch;
-                    footstepSource.pitch = isRunning ? 1.3f : 1.0f;
-                    footstepSource.PlayOneShot(grassFootsteps[idx], isRunning ? 0.7f : 0.5f);
-                    footstepSource.pitch = originalPitch;
-                }
-            }
-        }
-        else footstepTimer = 0f;
+        // 交给物理引擎播脚步声
+        locomotion.HandleFootsteps(hasMoveInput);
 
-        // IK
         if (leftHandIK != null)
         {
             leftHandIK.weight = Mathf.Lerp(leftHandIK.weight, targetLeftHandIKWeight, Time.deltaTime * 15f);
@@ -822,48 +573,15 @@ public class EldenRingMovement : MonoBehaviour
     }
     
 
-    // ==========================================
-    // 更新血条、耐力、怒气的数值文字
-    // ==========================================
-    private void UpdateUIBarTexts()
-    {
-        int currentH = Mathf.CeilToInt(currentHealth);
-        int currentS = Mathf.CeilToInt(currentStamina);
-        int currentR = Mathf.CeilToInt(currentRage);
-
-        int maxH = Mathf.CeilToInt(maxHealth);
-        int maxS = Mathf.CeilToInt(maxStamina);
-        int maxR = Mathf.CeilToInt(maxRage);
-
-        if (healthText != null && currentH != lastHealth)
-        {
-            healthText.text = $"{currentH} / {maxH}";
-            lastHealth = currentH;
-        }
-
-        if (staminaText != null && currentS != lastStamina)
-        {
-            staminaText.text = $"{currentS} / {maxS}";
-            lastStamina = currentS;
-        }
-
-        if (rageText != null && currentR != lastRage)
-        {
-            rageText.text = $"{currentR} / {maxR}";
-            lastRage = currentR;
-        }
-    }
-
     // ======= 锁定目标逻辑 =======
     void HandleLockOnInput()
     {
-        if (Input.GetMouseButtonDown(2)) // 鼠标中键
+        if (inputHandler.LockOnInput) // 鼠标中键
         {
             if (isLockedOn) ClearLockOn();
             else FindLockOnTarget();
         }
 
-        // 目标失效或距离过远时自动解锁
         if (isLockedOn)
         {
             if (lockedTarget == null || !lockedTarget.gameObject.activeInHierarchy)
@@ -873,10 +591,7 @@ public class EldenRingMovement : MonoBehaviour
             else
             {
                 float dist = Vector3.Distance(transform.position, lockedTarget.position);
-                if (dist > lockOnRadius * 1.5f) // 离开锁定范围的1.5倍后脱锁
-                {
-                    ClearLockOn();
-                }
+                if (dist > lockOnRadius * 1.5f) ClearLockOn();
             }
         }
     }
@@ -910,7 +625,7 @@ public class EldenRingMovement : MonoBehaviour
         {
             lockedTarget = bestTarget;
             isLockedOn = true;
-            Debug.Log("锁定目标: " + bestTarget.parent?.name);
+            //Debug.Log("锁定目标: " + bestTarget.parent?.name);
             // 显示UI
             if (lockOnUI != null) lockOnUI.gameObject.SetActive(true);
         }
@@ -920,7 +635,7 @@ public class EldenRingMovement : MonoBehaviour
     {
         isLockedOn = false;
         lockedTarget = null;
-        Debug.Log("解除锁定");
+        //Debug.Log("解除锁定");
         // ======= 新加：隐藏UI =======
         if (lockOnUI != null) lockOnUI.gameObject.SetActive(false);
     }
@@ -948,124 +663,44 @@ public class EldenRingMovement : MonoBehaviour
         }
     }
     
-    //  先定义地面检测函数（放在 Update 外面，作为独立方法）
-    private bool IsGrounded()
-    {
-        // 1. CharacterController 自带检测
-        if (controller.isGrounded) return true;
-    
-        // 2. 辅助球形射线检测 (SphereCast)
-        // 核心修复3：稍微再缩小一点半径，防止球体擦到身前楼梯的“垂直面”
-        float radius = controller.radius * 0.75f; 
-        
-        // 发射起点设在脚底往上一点的位置
-        Vector3 sphereCenter = transform.position + Vector3.up * (radius + 0.1f);
-        
-        // 往下探测 0.3f 距离
-        if (Physics.SphereCast(sphereCenter, radius, Vector3.down, out RaycastHit hit, 0.3f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-        {
-            // 核心修复4：排除撞到前方楼梯垂直面的情况！
-            // 必须满足：法线朝上（是真正的地板或缓坡），或者 击中点确实在我们的脚底高度以下
-            if (Vector3.Angle(hit.normal, Vector3.up) <= controller.slopeLimit + 5f || hit.point.y <= transform.position.y + 0.1f)
-            {
-                return true;
-            }
-        }
-        
-        return false;
-    }
 
-    void UpdateAnimation(bool hasMoveInput)
+    void UpdateAnimationValues(bool hasMoveInput)
     {
-        if (anim == null) return;
+        if (animHandler == null || anim == null) return;
         if (isAttacking || isLightAttacking) return;
 
-         // 跳跃期间锁定动画参数，避免空中切换移动/原地跳跃动画
-        if (isJumping)
+        // 跳跃期间锁定动画参数
+        if (locomotion.isJumping)
         {
-            // 保持起跳时的动画速度，不更新 Speed/Direction
-            anim.SetFloat("Speed", jumpStartSpeed);
-            anim.SetFloat("Direction", 0f);
+            animHandler.SetSpeedDirectly(locomotion.jumpStartSpeed);
             return;
         }    
 
-        if(isLockedOn)
+        if (isLockedOn)
         {
-            // 锁定模式：PosX 是 Direction(横移)，PosY 是 Speed(前后或速度大小)
-            float targetDir = moveInput.x; // A按键为-1，D按键为1
-            
-            // 计算当前的基础速度比例 (行走时约为1，奔跑时大于1)
-            float speedMag = currentSpeed / runSpeed; 
+            float targetDir = inputHandler.MoveInput.x; 
+            float speedMag = locomotion.currentSpeed / locomotion.runSpeed; 
             float targetSpeedAnim = 0f;
             
-            if (moveInput.y != 0) 
-            {
-                // W/S 控制前后移动：向前为正，向后为负 (如果你的后退动画需要Y为负数)
-                targetSpeedAnim = moveInput.y > 0 ? speedMag : -speedMag; 
-            } 
-            else if (moveInput.x != 0) 
-            {
-                // 纯A/D横移时，强行给PosY(Speed)赋值以满足你的要求 (Y>0.3触发慢横移，Y>1触发快横移)
-                targetSpeedAnim = speedMag;
-            }
+            if (inputHandler.MoveInput.y != 0) targetSpeedAnim = inputHandler.MoveInput.y > 0 ? speedMag : -speedMag; 
+            else if (inputHandler.MoveInput.x != 0) targetSpeedAnim = speedMag;
 
-            anim.SetFloat("Direction", Mathf.Lerp(anim.GetFloat("Direction"), targetDir, Time.deltaTime * 10f));
-            anim.SetFloat("Speed", Mathf.Lerp(anim.GetFloat("Speed"), targetSpeedAnim, Time.deltaTime * 10f));
+            animHandler.SyncMovementValues(targetSpeedAnim, targetDir, 10f);
         }
         else
         {
-            float animSpeed = 0f;
-            float direction = 0f;
-        
+            float targetAnimSpeed = 0f;
             if (hasMoveInput)
             {
-                float speedPercent = currentSpeed / runSpeed;
-                animSpeed = Mathf.Lerp(0.3f, 1f, speedPercent);
-                direction = currentTurnAngle;
+                float speedPercent = locomotion.currentSpeed / locomotion.runSpeed;
+                targetAnimSpeed = Mathf.Lerp(0.3f, 1f, speedPercent);
             }
-            else
-            {
-                direction = currentTurnAngle;
-            }
-            anim.SetFloat("Speed", animSpeed);
-            anim.SetFloat("Direction", direction);
+            
+            // 从物理引擎获取转角并同步
+            animHandler.SyncMovementValues(targetAnimSpeed, locomotion.currentTurnAngle, 50f);
         }
-        
     }
     
-    // 消耗耐力
-    private bool ConsumeStamina(float amount)
-    {
-        if (currentStamina >= amount)
-        {
-            currentStamina -= amount;
-            staminaRegenTimer = 0f;  // 重置恢复延迟
-            Debug.Log($"消耗耐力 {amount}，剩余 {currentStamina}");
-            return true;
-        }
-        Debug.Log("耐力不足！");
-        return false;  // 耐力不足
-    }
-
-    // 恢复耐力
-    private void RegenerateStamina()
-    {
-        if (staminaBlockRemaining > 0f) return;
-        if (staminaRegenTimer < staminaRegenDelay) return;
-
-        float regenRate = staminaRegenRate;
-        if (staminaRegenBuffTimer > 0f)
-        {
-            regenRate *= 2f;   // 加速翻倍
-            staminaRegenBuffTimer -= Time.deltaTime;
-        }
-
-        if (currentStamina < maxStamina)
-        {
-            currentStamina += regenRate * Time.deltaTime;
-            currentStamina = Mathf.Min(currentStamina, maxStamina);
-        }
-    }
 
     // ========== 攻击方法 ==========
     
@@ -1080,7 +715,6 @@ public class EldenRingMovement : MonoBehaviour
         currentState = ActionState.RunAttack;
         
         anim.Play("RunningAttack", 0, 0f);
-        lastSpeed = 0f;
         if (controller != null) controller.Move(Vector3.zero);
         Invoke("ForceEndRunningAttack", 1.5f);
     }
@@ -1129,7 +763,6 @@ public class EldenRingMovement : MonoBehaviour
             anim.SetLayerWeight(attackLayerIndex, 1f);
             
             anim.Play(Animator.StringToHash("Attack4"), attackLayerIndex, 0f);
-            lastSpeed = 0f;
             if (controller != null) controller.Move(Vector3.zero);
             return;
         }
@@ -1150,7 +783,6 @@ public class EldenRingMovement : MonoBehaviour
         anim.SetLayerWeight(attackLayerIndex, 1f);
         
         anim.Play(Animator.StringToHash("Attack1"), attackLayerIndex, 0f);
-        lastSpeed = 0f;
         if (controller != null) controller.Move(Vector3.zero);
     }
     
@@ -1175,7 +807,6 @@ public class EldenRingMovement : MonoBehaviour
         anim.SetLayerWeight(attackLayerIndex, 1f);
         anim.Play("LightAttack1", attackLayerIndex, 0f);
         
-        lastSpeed = 0f;
         if (controller != null) controller.Move(Vector3.zero);
     }
     
@@ -1523,7 +1154,7 @@ public class EldenRingMovement : MonoBehaviour
 
         if (heavyAttackEffects == null || heavyAttackEffects.Length == 0)
         {
-            Debug.LogWarning("heavyAttackEffects 数组为空！");
+            //Debug.LogWarning("heavyAttackEffects 数组为空！");
             return;
         } 
     
@@ -1545,7 +1176,7 @@ public class EldenRingMovement : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning($"无法播放特效 - 索引:{index}, 数组长度:{heavyAttackEffects.Length}");
+            //Debug.LogWarning($"无法播放特效 - 索引:{index}, 数组长度:{heavyAttackEffects.Length}");
         }
     }
 
@@ -1709,12 +1340,11 @@ public class EldenRingMovement : MonoBehaviour
         Animator[] allAnimators = effect.GetComponentsInChildren<Animator>(true);
         foreach (var animator in allAnimators)
         {
+            //必须确保有控制器，且组件本身是激活状态的
+            if (animator.runtimeAnimatorController == null || !animator.isActiveAndEnabled) continue;
             animator.Rebind();
             animator.Update(0f);
             
-            // 【核心修复】：不管美术把这套动画起名叫 "Play" 还是 "Take 001"，直接抓取默认状态从头播放！
-            AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
-            animator.Play(stateInfo.fullPathHash, -1, 0f);
         }
     
         //  3. 全面重启：藏在任何角落的旧版 Animation 动画组件
@@ -1745,15 +1375,12 @@ public class EldenRingMovement : MonoBehaviour
     //========技能释放==========
     void StartCast()
     {
-        Debug.Log("施法开始");
         currentState = ActionState.SkillCast;
         isCastingInvincible = true;  // 开启霸体
         castStartTime = Time.time;
     
         // 停止移动
-        moveInput = Vector2.zero;
-        currentSpeed = 0f;
-        lastSpeed = 0f;
+        locomotion.ResetSpeed();
     
         // 触发施法动画
         if (anim != null)
@@ -1835,8 +1462,6 @@ public class EldenRingMovement : MonoBehaviour
         {
             idleSelector.ResetIdleTimer();
         }
-
-        Debug.Log("施法彻底结束");
     }
 
     //根据当前攻击段数获取消耗
@@ -1892,7 +1517,7 @@ public class EldenRingMovement : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning($"PlayAttackSwing 无法识别当前攻击动画: {stateInfo.fullPathHash}");
+            //Debug.LogWarning($"PlayAttackSwing 无法识别当前攻击动画: {stateInfo.fullPathHash}");
         }
     }
     
@@ -2090,7 +1715,7 @@ public class EldenRingMovement : MonoBehaviour
 
         currentHealth -= finalDamage;        // 正常扣血
         if (healthSlider != null) healthSlider.value = currentHealth;
-        Debug.Log($"玩家受到 {finalDamage} 伤害，剩余生命 {currentHealth}/{maxHealth}");
+        //Debug.Log($"玩家受到 {finalDamage} 伤害，剩余生命 {currentHealth}/{maxHealth}");
 
         if (currentHealth <= 0)
         {
@@ -2188,8 +1813,7 @@ public class EldenRingMovement : MonoBehaviour
         qteSuccess = false;         // 重置QTE状态
         isWaitingForQTE = false;
         
-        moveInput = Vector2.zero;
-        currentSpeed = 0f;
+        locomotion.ResetSpeed();
 
         if (anim != null)
         {
@@ -2249,7 +1873,7 @@ public class EldenRingMovement : MonoBehaviour
                 QTEUIManager.Instance.HideQTE(false);
             }
             
-            Debug.Log("QTE 失败：挥空或伤害大减！");
+            //Debug.Log("QTE 失败：挥空或伤害大减！");
         }
     }
 
@@ -2282,7 +1906,7 @@ public class EldenRingMovement : MonoBehaviour
         if (Time.unscaledTime - lastEventTime < 0.1f) return;
         lastEventTime = Time.unscaledTime; // 记录本次触发时间
 
-        Debug.Log($"大招第 {index + 1} 段斩击判定触发");
+        //Debug.Log($"大招第 {index + 1} 段斩击判定触发");
 
         // 精准调用：根据传进来的数字，播放对应角度的特效包装盒
         if (ultSlashEffects != null && index >= 0 && index < ultSlashEffects.Length)
@@ -2408,7 +2032,7 @@ public class EldenRingMovement : MonoBehaviour
         if (Time.unscaledTime - lastEventTime < 0.1f) return;
         lastEventTime = Time.unscaledTime;
 
-        Debug.Log("大招伤害判定触发");
+        //Debug.Log("大招伤害判定触发");
 
         //播放砸地终结音效
         if (ultSlamSFX != null && audioSource != null)
@@ -2604,15 +2228,13 @@ public class EldenRingMovement : MonoBehaviour
 
         // 重置动画和状态标志（与 RestSequenceRoutine 相同）
         currentState = ActionState.IdleMove;
-
-        isJumping = false;
-        isStopping = false;
+ 
+        locomotion.ResetSpeed();
         comboPending = false;
         lightComboPending = false;
         targetLeftHandIKWeight = 1f;
 
-        moveInput = Vector2.zero;
-        currentSpeed = 0f;
+        locomotion.ResetSpeed();
 
         if (anim != null)
         {
@@ -2708,15 +2330,13 @@ public class EldenRingMovement : MonoBehaviour
 
         // 彻底重置所有状态，加上跳跃和急停的重置，防止卡轴
         currentState = ActionState.IdleMove;
-
-        isJumping = false;   
-        isStopping = false;        
+  
+        locomotion.ResetSpeed();   
         comboPending = false;
         lightComboPending = false;
         targetLeftHandIKWeight = 1f; // 兜底：挨打/攻击结束/复活时，强制恢复双手握持
         
-        moveInput = Vector2.zero;
-        currentSpeed = 0f;
+        locomotion.ResetSpeed();
 
         if (anim != null)
         {
@@ -2888,8 +2508,7 @@ public class EldenRingMovement : MonoBehaviour
  
         currentState = ActionState.IdleMove;
 
-        isRunning = false;
-        currentSpeed = 0f;
+        locomotion.ResetSpeed();
         targetLeftHandIKWeight = 1f; // 兜底：挨打/攻击结束/复活时，强制恢复双手握持
 
         if (healthSlider != null) healthSlider.value = currentHealth;
@@ -2945,7 +2564,7 @@ public class EldenRingMovement : MonoBehaviour
         // 稍微等待一小会儿以确保状态稳固
         yield return new WaitForSeconds(0.2f);
         
-        Debug.Log("玩家死亡后在最后一个赐福点复活！并且所有敌人已刷新！");
+        //Debug.Log("玩家死亡后在最后一个赐福点复活！并且所有敌人已刷新！");
     }
 
     //==========闪避==================
@@ -2954,7 +2573,7 @@ public class EldenRingMovement : MonoBehaviour
         // 检查耐力
         if (!ConsumeStamina(dodgeStaminaCost))
         {
-            Debug.Log("耐力不足，无法闪避");
+            //Debug.Log("耐力不足，无法闪避");
             return;
         }
 
@@ -3046,12 +2665,12 @@ public class EldenRingMovement : MonoBehaviour
 
     private void Die()
     {
-        Debug.Log("Die() 被调用！当前血量：" + currentHealth);
+        //Debug.Log("Die() 被调用！当前血量：" + currentHealth);
         if (isDead) return;
         currentState = ActionState.Dead;
         StopAllCoroutines();                // 停止所有协程
         Time.timeScale = 1f;                // 确保时间缩放恢复
-        Debug.Log("玩家死亡");
+        //Debug.Log("玩家死亡");
     
         // 播放死亡音效
         if (deathSFX != null && audioSource != null)
@@ -3061,8 +2680,7 @@ public class EldenRingMovement : MonoBehaviour
         // 停止所有动作
         currentState = ActionState.IdleMove;
 
-        isRunning = false;
-        currentSpeed = 0f;
+        locomotion.ResetSpeed();
     
         // 播放死亡动画（需要在 Animator 中添加 Death 状态和 Trigger 参数 "Die"）
         if (anim != null)
@@ -3081,21 +2699,6 @@ public class EldenRingMovement : MonoBehaviour
         StartCoroutine(Respawn());
     }
 
-
-
-    private void LoadGrassFootsteps()
-    {
-        // 方法1：加载文件夹下所有音频（推荐）
-        grassFootsteps = Resources.LoadAll<AudioClip>("Audio/grass walk");
-        if (grassFootsteps.Length == 0)
-        {
-            Debug.LogWarning("未找到草地脚步声！请将音频放在 Resources/Audio/grass walk 文件夹");
-        }
-        else
-        {
-            Debug.Log($"成功加载 {grassFootsteps.Length} 个草地脚步声");
-        }
-    }
 
     private void UpdateCombatBGM()
     {

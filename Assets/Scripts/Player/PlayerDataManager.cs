@@ -38,8 +38,8 @@ public class PlayerDataManager : MonoBehaviour
 
     private void Awake()
     {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
+        // 【架构修复】：防自杀单例模式
+        Instance = this;
     }
 
     // ==========================================
