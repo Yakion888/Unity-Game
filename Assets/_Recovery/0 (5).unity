@@ -371,6 +371,7 @@ MonoBehaviour:
   isBlockinglightningDamage: 0
   lightningRadius: 2.5
   lightningPushForce: 15
+  attackTriggerDistance: 8
 --- !u!1001 &11817277
 PrefabInstance:
   m_ObjectHideFlags: 0
