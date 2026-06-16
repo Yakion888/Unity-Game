@@ -628,7 +628,7 @@ public class EldenRingMovement : MonoBehaviour
         {
             BasicEnemyTest enemy = col.GetComponent<BasicEnemyTest>();
 
-            if (enemy != null && !enemy.startHidden && !enemy.isDead && enemy.currentState != BasicEnemyTest.EnemyState.Hit) // 可根据需求放宽条件
+            if (enemy != null && enemy.currentState != BasicEnemyTest.EnemyState.Hidden && !enemy.isDead && enemy.currentState != BasicEnemyTest.EnemyState.Hit) // 可根据需求放宽条件
             {
                 Vector3 dirToEnemy = (col.transform.position - transform.position).normalized;
                 // 优先锁定屏幕视野前方的敌人

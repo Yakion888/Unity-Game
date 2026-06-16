@@ -67,15 +67,15 @@ public class CharacterUIManager : MonoBehaviour
         // 拼接文字显示（格式参考：等级: 5  (卢恩: 1500 / 3000) ）
         levelText.text = $"等级: {playerStats.currentLevel} \n经验: {playerStats.currentXP} / {nextLevelXP}";
 
-        vigorText.text = $"生命力: {playerStats.statVigor} \n   最大HP: {playerStats.maxHealth}";
+        vigorText.text = $"生命力: {playerStats.statVigor}   最大HP: {playerStats.maxHealth}";
         
-        enduranceText.text = $"持久力: {playerStats.statEndurance} \n   最大耐力: {playerStats.maxStamina}";
+        enduranceText.text = $"持久力: {playerStats.statEndurance}    最大耐力: {playerStats.maxStamina}";
         
-        strengthText.text = $"力量: {playerStats.statStrength} \n   攻击力加成: +{playerStats.attackPowerBonus}";
+        strengthText.text = $"力量: {playerStats.statStrength}    攻击力加成: +{playerStats.attackPowerBonus}";
         
-        resistanceText.text = $"坚韧度: {playerStats.statResistance} \n   物理防御: {playerStats.defensePower}";
+        resistanceText.text = $"坚韧度: {playerStats.statResistance}    物理防御: {playerStats.defensePower}";
         
-        spiritText.text = $"精神力: {playerStats.statSpirit} \n   怒气获取倍率: {playerStats.rageGainMultiplier:F2}x";
+        spiritText.text = $"精神力: {playerStats.statSpirit}    怒气获取倍率: {playerStats.rageGainMultiplier:F2}x";
 
         if (weaponText != null)
         {

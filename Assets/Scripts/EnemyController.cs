@@ -2,114 +2,114 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.AI; //引入导航网格库
 
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(Animator))]
+[RequireComponent(typeof(NavMeshAgent))] //强制要求挂载导航组件
 public class BasicEnemyTest : MonoBehaviour
 {
-    public enum EnemyState { Idle, Patrol, Chase, Attack, Hit }
-    public EnemyState currentState = EnemyState.Idle;
+    public enum EnemyState { Hidden, Idle, Patrol, Chase, Attack, MagicCast, Hit, Dead }
+    public EnemyState currentState = EnemyState.Hidden;
 
-    // ====== 【魂系复活系统】 ======
-    // 用一个静态列表记录场景里所有敌人，性能远高于每次去 Find 查找
     public static List<BasicEnemyTest> allEnemies = new List<BasicEnemyTest>();
 
-    private Vector3 initialPosition;     // 记录出生位置
-    private Quaternion initialRotation;  // 记录出生朝向
-    private bool initialHiddenState;     // 记录最初是否是隐藏状态
+    [Header("References")]
+    public Transform player;
+    public Transform lockOnPoint;
+
+    [Header("潜伏与现身设置")]
+    public bool startHidden = true;                
+    public float appearDistance = 15f;             // 玩家靠近到多少米时，怪物从草丛跳出来
+    public GameObject appearEffect;                
+    private bool hasAppeared = false;              
+
+    [Header("巡逻系统 (Waypoints)")]
+    public Transform[] patrolPoints;               // 巡逻点数组
+    public float patrolWaitTime = 2.0f;            // 到达巡逻点后发呆多久
+    private int currentWaypointIndex = 0;
+    private float patrolTimer = 0f;
+
+    [Header("感知系统 (Sensory)")]
+    public float sightDistance = 12f;              // 视线最远距离
+    public float fovAngle = 90f;                   // 视野扇形角度（前方90度）
+    public float hearingRadius = 4f;               // 听觉半径（背后靠近也会被发现）
+    public LayerMask obstacleMask;                 // 视线阻挡层（墙壁、大石头）
+
+    [Header("战斗与移动参数")]
+    public float attackDistance = 2.5f;
+    public float walkSpeed = 2f;
+    public float runSpeed = 6f;
+    public float enemyDefense = 20f;       
+    public int xpReward = 150;             
+    public int goldReward = 50;            
+    public int maxHealth = 300;
+    public int attackDamage = 20;
+
+    //闪电攻击
+    private MonsterLightningAttack lightningSkill;
+    private float lightningCooldownTimer = 0f;
+    private float fsmStateTimer = 0f; // AI 防卡死计时器
+
+    [Header("受击与物理")]
+    public float knockbackForce = 15f;      
+    public float hitStunDuration = 0.5f;   
+    public bool isSuspended = false;        
+    public bool isDead = false; 
+    private bool isHitStunned;              
+    private float currentStunDuration = 0.5f; 
+    private Vector3 knockbackDirection;     
+    private Vector3 impact;                 
+    private float verticalVelocity;
+    private float gravity = -9.81f;
+
+    [Header("UI 设置")]
+    public Slider healthSlider;
+    public Canvas uiCanvas; 
+    private Camera playerCamera;
+
+    // 内部组件缓存
+    private Animator anim;
+    private CharacterController controller;
+    private NavMeshAgent agent;
+
+    private int currentHealth;
+    private float currentSpeed = 0f;
+    private float currentDirection = 0f;
+
+    private Vector3 initialPosition;     
+    private Quaternion initialRotation;  
+    
+    // 胶囊体缓存
+    private float originalHeight;
+    private float originalRadius;
+    private Vector3 originalCenter;
+    private float originalStepOffset; 
 
     void Awake()
     {
-        // 怪物一加载，就把它自己加入到全局名单中
         if (!allEnemies.Contains(this)) allEnemies.Add(this);
     }
 
     void OnDestroy()
     {
-        // 怪物被彻底摧毁时移出名单
         if (allEnemies.Contains(this)) allEnemies.Remove(this);
     }
 
-    [Header("References")]
-    public Transform player;
-
-
-    // ========锁定聚焦点 =======
-    [Header("锁定设置")]
-    [Tooltip("创建一个空物体放在敌人胸口，拖到此处。如果不填则默认锁定脚底")]
-    public Transform lockOnPoint;
-
-    private Animator anim;
-    private CharacterController controller;
-
-    [Header("Settings")]
-    public float chaseDistance = 10f;
-    public float attackDistance = 2.5f;
-    public float walkSpeed = 3f;
-    public float runSpeed = 7f;
-
-    [Header("RPG 属性")]
-    public float enemyDefense = 20f;       // 敌人的护甲防御力
-    public int xpReward = 150;             // 击杀掉落的经验/卢恩
-    public int goldReward = 50;            // 击杀掉落的金币
-
-    [Header("生命值")]
-    public int maxHealth = 300;
-    private int currentHealth;
-
-    [Header("攻击设置")]
-    public int attackDamage = 20;
-
-    // 受击设置
-    [Header("受击设置")]
-    public float knockbackForce = 15f;      // 击退力度（调大）
-    public float hitStunDuration = 0.5f;   // 硬直时间
-    public bool isSuspended = false;        // 【新增】：是否被击飞滞空（无视重力）
-    public bool isDead = false; // 🌟【新增】：标记是否已经彻底死亡
-    private bool isHitStunned;              // 是否处于硬直状态
-    private float currentStunDuration = 0.5f; // 当前的硬直时长
-    private Vector3 knockbackDirection;     // 击退方向
-    private Vector3 impact;                 // 冲击力（用于击退）
-    
-
-    [Header("UI 设置")]
-    public Slider healthSlider;
-    public Canvas uiCanvas; // 需要拖入挂载 Slider 的世界空间 Canvas
-
-    [Header("隐藏与出现")]
-    public bool startHidden = true;                // 是否初始隐藏
-    public float appearDelay = 0f;                 // 出现延迟（秒）
-    public bool autoChaseOnAppear = true;          // 出现后是否立即追逐（否则进入巡逻）
-    public float detectionRange = 8f;              // 检测玩家的范围（触发器半径）
-    public GameObject appearEffect;                // 出现时的特效预制体（可选）
-    
-    // ====== 【胶囊体修复系统】 ======
-    private float originalHeight;
-    private float originalRadius;
-    private Vector3 originalCenter;
-    private float originalStepOffset; // 🌟【新增】记录原版爬阶高度
-
-    // 重力相关
-    private float verticalVelocity;
-    private float gravity = -9.81f;
-    
-    // 动画平滑过渡
-    private float currentDirection = 0f;
-    private float currentSpeed = 0f;
-
-    private Camera playerCamera;
-
     void Start()
     {
-        // 【新增】记录初始状态，为了赐福点复活做准备
         initialPosition = transform.position;
         initialRotation = transform.rotation;
-        initialHiddenState = startHidden;
 
         anim = GetComponent<Animator>();
         controller = GetComponent<CharacterController>();
+        agent = GetComponent<NavMeshAgent>();
+        lightningSkill = GetComponent<MonsterLightningAttack>();
 
-        // ✅ 【新增】：记录怪物原本的物理胶囊体大小
+        // 【核心】：接管 NavMeshAgent 的旋转和物理，因为我们有自己的动画和重力
+        agent.updatePosition = true; 
+        agent.updateRotation = false; // 我们自己写平滑转身
+
         if (controller != null)
         {
             originalHeight = controller.height;
@@ -122,608 +122,304 @@ public class BasicEnemyTest : MonoBehaviour
         if (lockOnPoint == null) lockOnPoint = transform;
 
         currentHealth = maxHealth;
+        if (healthSlider != null) { healthSlider.maxValue = maxHealth; healthSlider.value = currentHealth; }
 
-        // 初始化敌人血条
-        if (healthSlider != null)
-        {
-            healthSlider.maxValue = maxHealth;
-            healthSlider.value = currentHealth;
-        }
-
-        // 初始化 UI 相机引用
         if (uiCanvas != null)
         {
-            if (uiCanvas.worldCamera != null)
-                playerCamera = uiCanvas.worldCamera;
-            else
-                playerCamera = Camera.main;
-
-            if (playerCamera == null)
-                Debug.LogError("找不到相机，血条无法面向相机！");
+            playerCamera = uiCanvas.worldCamera != null ? uiCanvas.worldCamera : Camera.main;
+            uiCanvas.transform.localPosition = new Vector3(0, 2f, 0); 
         }
 
+        // 初始化潜伏状态
         if (startHidden)
         {
             SetVisible(false);
-            // ✅ 替换为精准禁用控制器：
-            if (controller != null) controller.enabled = false;
-            
-            // 初始状态设为 Idle，不移动
-            currentState = EnemyState.Idle;
+            TogglePhysics(false);
+            currentState = EnemyState.Hidden;
+            hasAppeared = false;
         }
         else
         {
-            // 不隐藏时，默认进入巡逻或追逐
-            currentState = autoChaseOnAppear ? EnemyState.Chase : EnemyState.Patrol;
+            hasAppeared = true;
+            currentState = patrolPoints.Length > 0 ? EnemyState.Patrol : EnemyState.Idle;
         }
-
-        // 初始血条显隐（根据初始状态）
-        if (uiCanvas != null)
-        {
-            uiCanvas.gameObject.SetActive(currentState == EnemyState.Chase || currentState == EnemyState.Attack);
-        }
-
-        // 可选：确保 Canvas 初始位置在敌人头顶
-        // 如果你已经把 Canvas 作为子物体并调整好了局部坐标，这步可以省略
-        if (uiCanvas != null)
-            uiCanvas.transform.localPosition = new Vector3(0, 2f, 0); // 根据实际调整
-
     }
 
     void Update()
     {
-        // 安全锁：如果控制器未启用（例如隐藏状态），直接跳过移动和重力
-        if (controller == null) return;
+        if (isDead) return;
 
-        // ========== 🌟 死亡、硬直、滞空专用物理系统 ==========
-        if (isHitStunned || currentState == EnemyState.Hit || isDead)
+        // 处理硬直物理（击退/击飞时，关闭导航网格，使用原生物理）
+        if (isHitStunned || currentState == EnemyState.Hit)
         {
-            // 滞空时（例如被挑飞）忽略重力
-            if (isSuspended)
-            {
-                verticalVelocity = 0f;
-            }
-            else
-            {
-                // 地面检测重置垂直速度
-                if (controller.isGrounded && verticalVelocity < 0)
-                    verticalVelocity = 0;
-
-                verticalVelocity += gravity * Time.deltaTime;
-                if (verticalVelocity < -20f) verticalVelocity = -20f;
-            }
-
-            // ✅ 修改点：将 frameVelocity 改为 velocity
-            Vector3 velocity = new Vector3(0, verticalVelocity, 0);
-
-            // 叠加冲击力（击退、击飞）
-            if (impact.magnitude > 0.1f)
-            {
-                velocity += impact;
-                // 如果死了，或者受到了巨大的击退力（大招砸地），摩擦力变小（3f），让它滑得极远！普通的击退摩擦力大（10f）
-                float decay = (isDead || impact.magnitude > 10f) ? 3f : 10f;
-                impact = Vector3.Lerp(impact, Vector3.zero, Time.deltaTime * decay);
-            }
-
-            // 物理分流：活着时用 CharacterController，尸体用 Transform 直接移动
-            if (controller.enabled)
-            {
-                controller.Move(velocity * Time.deltaTime);
-            }
-            else
-            {
-                transform.position += velocity * Time.deltaTime;
-
-               // 🌟【核心修复 2：无视触发器的射线】防止尸体打到自己的探测圈停在半空！
-                if (!isSuspended && verticalVelocity < 0)
-                {
-                    if (Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.down, out RaycastHit hit, 1.0f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-                    {
-                        transform.position = new Vector3(transform.position.x, hit.point.y, transform.position.z);
-                        verticalVelocity = 0f;
-                    }
-                }
-            }
-
-            UpdateAnimator(0f, 0f);
-            return; // 硬直/死亡期间不执行后续任何移动或状态切换
+            HandleHitPhysics();
+            return; 
         }
 
-        // ========== 🌟 正常存活状态（Idle / Chase / Attack） ==========
-        if (!controller.enabled) return;
-        // 重新计算重力（因为硬直分支可能已经修改过 verticalVelocity 但不会影响存活状态）
-        bool isGrounded = controller.isGrounded;
-        if (isGrounded && verticalVelocity < 0)
-            verticalVelocity = 0;
-        verticalVelocity += gravity * Time.deltaTime;
-        if (verticalVelocity < -20f) verticalVelocity = -20f;
+        if (lightningCooldownTimer > 0) lightningCooldownTimer -= Time.deltaTime;
 
-        // 当前帧的基础移动向量（只含重力）
-        Vector3 frameVelocity = new Vector3(0, verticalVelocity, 0);
-
-        // 叠加冲击力
-        if (impact.magnitude > 0.1f)
+        if (currentState == EnemyState.Attack || currentState == EnemyState.MagicCast)
         {
-            frameVelocity += impact;
-            impact = Vector3.Lerp(impact, Vector3.zero, Time.deltaTime * 10f);
+            fsmStateTimer += Time.deltaTime;
+            // 如果一个攻击动作或施法卡了超过 3 秒，绝对是出 Bug 了！强制打断让他重新追击！
+            if (fsmStateTimer > 3.0f) 
+            {
+                currentState = EnemyState.Chase;
+                fsmStateTimer = 0f;
+            }
+        }
+        else 
+        {
+            fsmStateTimer = 0f; // 不在攻击状态时清零
         }
 
-        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
-
+        // 状态机大脑
         switch (currentState)
         {
+            case EnemyState.Hidden:
+                UpdateHiddenState();
+                break;
             case EnemyState.Idle:
-                UpdateAnimator(0f, 0f);
-                controller.Move(frameVelocity * Time.deltaTime);
-                // 只有已经出现（非隐藏）且玩家在追逐范围内才切换状态
-                if (!startHidden && distanceToPlayer < chaseDistance)
-                    currentState = EnemyState.Chase;
+                UpdateIdleState();
                 break;
-
+            case EnemyState.Patrol:
+                UpdatePatrolState();
+                break;
             case EnemyState.Chase:
-                FaceTarget(player.position);
-                float targetSpeedValue = distanceToPlayer > (attackDistance + 2f) ? 1.5f : 0.5f;
-                float moveSpeed = distanceToPlayer > (attackDistance + 2f) ? runSpeed : walkSpeed;
-
-                UpdateAnimator(0f, targetSpeedValue);
-
-                // 追击时叠加向前的速度
-                frameVelocity += transform.forward * moveSpeed;
-                controller.Move(frameVelocity * Time.deltaTime);
-
-                if (distanceToPlayer <= attackDistance)
-                {
-                    currentState = EnemyState.Attack;
-                    anim.SetTrigger("Attack");
-                    UpdateAnimator(0f, 0f);
-                }
-                else if (distanceToPlayer > chaseDistance)
-                {
-                    currentState = EnemyState.Idle;
-                }
+                UpdateChaseState();
                 break;
-
             case EnemyState.Attack:
-                FaceTarget(player.position);
-                controller.Move(frameVelocity * Time.deltaTime);
+                UpdateAttackState();
+                break;
+            case EnemyState.MagicCast: // 处理施法状态
+                UpdateMagicCastState();
                 break;
         }
+
+        // 同步动画机 (根据 NavMesh 算出的真实移速)
+        UpdateAnimator();
     }
 
     void LateUpdate() 
     {
-        // 1. 每帧刷新血条显隐（将其从 Update 底部移到了这里，这样就不会被跳过了）
-        UpdateHealthBarVisibility();
+        bool shouldShowUI = (currentState == EnemyState.Chase || currentState == EnemyState.Attack || currentState == EnemyState.Hit) && hasAppeared && !isDead;
+        if (uiCanvas != null && uiCanvas.gameObject.activeSelf != shouldShowUI)
+        {
+            uiCanvas.gameObject.SetActive(shouldShowUI);
+        }
 
-        // 2. 让血条一直面向玩家的相机
         if (uiCanvas != null && playerCamera != null && uiCanvas.gameObject.activeSelf)
         {   
             uiCanvas.transform.rotation = playerCamera.transform.rotation;
         }
     }
 
-    //===========敌人隐藏机制============
-    private void SetVisible(bool visible)
+    // ==========================================
+    // AI 状态树逻辑
+    // ==========================================
+
+    private void UpdateHiddenState()
     {
-        // 启用/禁用所有渲染器（MeshRenderer, SkinnedMeshRenderer等）
-        var renderers = GetComponentsInChildren<Renderer>();
-        foreach (var r in renderers)
+        if (Vector3.Distance(transform.position, player.position) <= appearDistance)
         {
-            r.enabled = visible;
+            StartCoroutine(AppearRoutine());
         }
     }
 
-    private void OnTriggerEnter(Collider other)
+    private void UpdateIdleState()
     {
-        if (!startHidden) return;          // 已经出现，不再重复触发
-        if (other.CompareTag("Player"))
-        {
-            StartCoroutine(AppearAndCombat());
-        }
-    }
-
-    private IEnumerator AppearAndCombat()
-    {
-        if (appearDelay > 0)
-            yield return new WaitForSeconds(appearDelay);
-
-        // 出现特效（如果有）
-        if (appearEffect != null)
-            Instantiate(appearEffect, transform.position, Quaternion.identity);
-
-        // 显示模型
-        SetVisible(true);
-        
-        // ✅ 替换为精准启用控制器：
-        if (controller != null) controller.enabled = true;
-
-        startHidden = false;   // 防止再次触发
-
-        // 决定出现后的状态
-        if (autoChaseOnAppear)
+        agent.isStopped = true;
+        if (CanSeeOrHearPlayer()) 
         {
             currentState = EnemyState.Chase;
         }
-        else
-        {
-            // 如果需要巡逻，请确保已经实现 Patrol 状态
-            currentState = EnemyState.Patrol;
-        }
     }
 
-    private void UpdateHealthBarVisibility()
+    private void UpdatePatrolState()
     {
-        if (uiCanvas == null) return;
-        bool shouldShow = (currentState == EnemyState.Chase || currentState == EnemyState.Attack || currentState == EnemyState.Hit);
-        if (uiCanvas.gameObject.activeSelf != shouldShow)
+        if (patrolPoints.Length == 0) return;
+
+        // 如果发现玩家，瞬间切换到追逐！
+        if (CanSeeOrHearPlayer())
         {
-            uiCanvas.gameObject.SetActive(shouldShow);
-        }
-    }
-
-    // 普通攻击受击（只有水平击退）
-    public void TakeDamageWithDirection(Vector3 direction, float force, int rawDamage, int damageType = 0)
-    {
-        isSuspended = false;
-        if (currentHealth <= 0) return;
-
-        // 加上敌人的防御力减伤计算
-        float damageReduction = 100f / (100f + enemyDefense);
-        int finalDamage = Mathf.RoundToInt(rawDamage * damageReduction);
-        finalDamage = Mathf.Max(1, finalDamage);
-
-        currentHealth -= finalDamage;  // 使用最终计算好的伤害扣血
-        if (healthSlider != null) healthSlider.value = currentHealth;
-
-        // 生成伤害漂字
-        if (DamageTextPoolManager.Instance != null)
-        {
-            Vector3 textPos = transform.position + Vector3.up * 2.0f;
-            DamageTextPoolManager.Instance.ShowDamageText(textPos, finalDamage, damageType);
-        }
-
-        //Debug.Log($"敌人受到 {finalDamage} 伤害，剩余生命 {currentHealth}/{maxHealth}");
-    
-        // 必须在死亡 return 之前赋予击退力，这样无论死活，都能吃到物理惯性向后摩擦！
-        knockbackDirection = direction;
-        knockbackDirection.y = 0;
-        impact = knockbackDirection * force; 
-
-        if (currentHealth <= 0)
-        {
-            // 动态判定死亡动画
-            // 检查 damageType，如果是 2 (技能大招伤害)，就传入 true 播放 DieBySkill (击飞倒地)！
-            bool isSkillDeath = (damageType == 2);
-            Die(isSkillDeath);
+            currentState = EnemyState.Chase;
             return;
         }
 
-        currentState = EnemyState.Hit;
-        isHitStunned = true;
-
-        if (anim != null) anim.SetTrigger("Hit");
-        UpdateAnimator(0f, 0f);
-
-        currentStunDuration = hitStunDuration; // 回归默认的短硬直 (0.5秒)
-
-        StopCoroutine("EndHitStun"); 
-        StartCoroutine("EndHitStun");
-    }
-
-    // 死亡方法
-    void Die(bool isSkillDeath = false)
-    {
-        if (isDead) return;
-        isDead = true;
-
-        // ----- 新增：通知任务管理器 -----
-        TaskManager tm = FindObjectOfType<TaskManager>();
-        if (tm != null) tm.ReportEnemyKilled();
-
-        // 给玩家加经验
-        EldenRingMovement playerMovement = player.GetComponent<EldenRingMovement>();
-        if (playerMovement != null)
-        {
-            playerMovement.AddXP(xpReward);
-            playerMovement.AddGold(goldReward);
-        } 
-
-        if (anim != null)
-        {
-            if(isSkillDeath) anim.SetTrigger("DieBySkill");
-            else anim.SetTrigger("Die");
-        }
-
-        currentState = EnemyState.Hit; 
-        isHitStunned = true;
-        if (uiCanvas != null) uiCanvas.gameObject.SetActive(false);
-
-        // 彻底关闭所有物理，它将通过 Update 里的 transform 移动，绝不挡路
-        if (controller != null) controller.enabled = false;
-        CapsuleCollider solidCollider = GetComponent<CapsuleCollider>();
-        if (solidCollider != null) solidCollider.enabled = false;
-
-        StartCoroutine(DisableAfterDeath());
-    }
-
-    private IEnumerator DisableAfterDeath()
-    {
-        yield return new WaitForSeconds(2.5f); // 等待死亡动画播完
-        // 动画播完，尸体停稳后，再彻底关闭物理
-        if (controller != null) controller.enabled = false;
-        GetComponent<Collider>().enabled = false;
-        gameObject.SetActive(false); // 隐藏进内存，等待篝火刷新
-    }
-
-    // 技能受击（击飞效果）增加了一个 stunTime 参数，默认 0.5 秒，大招可以传更长的时间
-    public void TakeKnockbackWithUp(Vector3 direction, float force, int rawDamage, float upForce = 5f, int damageType = 0, float stunTime = 0.5f)
-    {
-        if (isDead && upForce >= 0) return; 
-
-        isSuspended = false; // 解除滞空
-
-        if (!isDead)
-        {
-            float damageReduction = 100f / (100f + enemyDefense);
-            int finalDamage = Mathf.RoundToInt(rawDamage * damageReduction);
-            finalDamage = Mathf.Max(1, finalDamage);
-
-            currentHealth -= finalDamage;
-            if (healthSlider != null) healthSlider.value = currentHealth;
-
-            if (DamageTextPoolManager.Instance != null)
-        {
-            Vector3 textPos = transform.position + Vector3.up * 2.0f;
-            DamageTextPoolManager.Instance.ShowDamageText(textPos, finalDamage, damageType);
-        }
-        }
+        agent.isStopped = false;
+        agent.speed = walkSpeed;
+        agent.SetDestination(patrolPoints[currentWaypointIndex].position);
         
-        knockbackDirection = direction;
-        knockbackDirection.y = 0;
+        // 巡逻时平滑看向自己行进的前方
+        if (agent.velocity.sqrMagnitude > 0.1f) FaceTarget(transform.position + agent.velocity);
 
-        // 必须先剥夺所有物理碰撞体积！防止下面的找地射线打到自己！
-        if (stunTime > 1.0f || isDead || upForce < 0) 
+        // 核心修复：必须用 agent 自身的 stoppingDistance 作为到达判定标准！
+        if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance + 0.2f)
         {
-            if (controller != null) 
-            { 
-                controller.enabled = false; 
-                controller.height = 0.2f; 
-                controller.radius = 0.01f;
-                controller.center = new Vector3(0, 0.1f, 0); 
-                controller.stepOffset = 0f; 
-            }
-            CapsuleCollider solidCollider = GetComponent<CapsuleCollider>();
-            if (solidCollider != null) solidCollider.enabled = false;
-        }
+            patrolTimer += Time.deltaTime;
+            agent.isStopped = true;
 
-
-        // 处理大招的“终极砸地坠落”！
-        if (upForce < 0)
-        {
-           // 🌟【核心修复 3：忽略触发器！】完美穿透假碰撞体找到真实的物理地面
-           if (Physics.Raycast(transform.position + Vector3.up, Vector3.down, out RaycastHit groundHit, 20f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            if (patrolTimer >= patrolWaitTime)
             {
-                if (controller != null) controller.enabled = false;
-                transform.position = groundHit.point; 
+                patrolTimer = 0f;
+                currentWaypointIndex = (currentWaypointIndex + 1) % patrolPoints.Length; // 前往下一个点
             }
-            impact = knockbackDirection * force;
-            verticalVelocity = -10f; 
         }
-        else
-        {
-            // 普通击飞
-            impact = knockbackDirection * force + Vector3.up * upForce;
-        }
+    }
 
+    private void UpdateChaseState()
+    {
+        float distToPlayer = Vector3.Distance(transform.position, player.position);
 
-        // 死亡判定与动画处理分流   
-        if (currentHealth <= 0)
+        // 如果追着追着玩家跑得太远了（脱战），回归巡逻
+        if (distToPlayer > sightDistance * 1.5f)
         {
-            // 如果它被砸这一下之前就已经死了，为了表现力，强制重播一次倒地被砸的动画！
-            if (isDead && anim != null && upForce < 0) anim.SetTrigger("DieBySkill"); 
-            Die(true); 
+            currentState = patrolPoints.Length > 0 ? EnemyState.Patrol : EnemyState.Idle;
             return;
         }
 
-        //没死
-        if (stunTime > 1.0f) anim.SetTrigger("DieBySkill"); 
-        else anim.SetTrigger("Hit");
-
-        currentState = EnemyState.Hit;
-        isHitStunned = true;
-        UpdateAnimator(0f, 0f);
-
-        currentStunDuration = stunTime;
-        StopCoroutine(nameof(EndHitStun));
-        StartCoroutine(nameof(EndHitStun));
-    }
-
-    // 【全新方法】：大招第五段专属击飞（强制滞空 + 播放特殊动画）
-     public void TakeLaunchDamage(Vector3 direction, float force, int rawDamage, float upForce = 8f, int damageType = 2)
-    {
-        // 即使死了也允许被挑飞！这叫硬核鞭尸！
-        if (!isDead)
+        // 在 Chase 状态下，如果距离超过 8 米，且冷却好了，直接施法！
+        if (distToPlayer > 8f && distToPlayer <= 16f && lightningCooldownTimer <= 0 && lightningSkill != null)
         {
-            float damageReduction = 100f / (100f + enemyDefense);
-            int finalDamage = Mathf.RoundToInt(rawDamage * damageReduction);
-            finalDamage = Mathf.Max(1, finalDamage);
-
-            currentHealth -= finalDamage;
-            if (healthSlider != null) healthSlider.value = currentHealth;
-
-            if (DamageTextPoolManager.Instance != null)
-            {
-                Vector3 textPos = transform.position + Vector3.up * 2.0f;
-                DamageTextPoolManager.Instance.ShowDamageText(textPos, finalDamage, damageType);
-            }
-        }
-
-        // 极限缩小胶囊体半径（Radius），彻底解决玩家跳跃踩头（垫脚石）Bug，压扁胶囊体时必须把 stepOffset 归零
-        if (controller != null)
-        {
-            controller.enabled = false;
-            controller.height = 0.2f;
-            controller.radius = 0.01f;
-            controller.center = new Vector3(0, 0.1f, 0);
-            controller.stepOffset = 0f; // 🌟 防止报错
-            controller.enabled = true;
-        }
-        CapsuleCollider solidCollider = GetComponent<CapsuleCollider>();
-        if (solidCollider != null) solidCollider.enabled = false;
-
-        knockbackDirection = direction;
-        knockbackDirection.y = 0;
-        impact = knockbackDirection * force + Vector3.up * upForce;
-
-        currentState = EnemyState.Hit;
-        isHitStunned = true;
-        isSuspended = true; // 激活悬浮状态
-
-        if (currentHealth <= 0 && !isDead)
-        {
-            Die(true); // 首次死亡，触发死亡逻辑，但物理引擎会继续把它送上天
+            currentState = EnemyState.MagicCast;
+            agent.isStopped = true;
+            anim.SetTrigger("Cast");
+    
+            lightningSkill.ExecuteLightningStrike();
+            lightningCooldownTimer = 8f; // 8秒冷却
+    
             return;
         }
 
-        if (isDead)
+        if (distToPlayer <= attackDistance)
         {
-            if (anim != null) anim.SetTrigger("DieBySkill"); 
+            currentState = EnemyState.Attack;
+            agent.isStopped = true;
+            anim.SetTrigger("Attack");
         }
         else
         {
-            if (anim != null) anim.SetTrigger("KnockUp"); 
+            agent.isStopped = false;
+            agent.speed = runSpeed;
+            agent.SetDestination(player.position);
+            FaceTarget(agent.steeringTarget);
         }
-
-        currentStunDuration = 1.0f; 
-
-        StopCoroutine(nameof(EndHitStun));
-        StartCoroutine(nameof(EndHitStun));
     }
-    
-    
-    System.Collections.IEnumerator EndHitStun()
+
+    private void UpdateMagicCastState()
     {
-         // 1. 等待两帧，确保 Animator 已经彻底响应了 Trigger 并切入受击/倒地状态
-        yield return new WaitForEndOfFrame();
-        yield return new WaitForEndOfFrame();
+        agent.isStopped = true;
+        // 细节优化：施法倒计时期间，怪物依然会死死盯着玩家转动身体
+        FaceTarget(player.position); 
+    }
 
-        float elapsed = 0f;
+    private void UpdateAttackState()
+    {
+        agent.isStopped = true;
+        FaceTarget(player.position); // 攻击时死死盯住玩家
+    }
 
-        // 2. 🌟【核心修复 3：动态双锁检测！】
-        // 我们不再死等一个静态的数值，而是每一帧都去查岗！
-        while (true)
+    // ==========================================
+    // 核心感知系统 (FOV & Hearing)
+    // ==========================================
+    private bool CanSeeOrHearPlayer()
+    {
+        float distToPlayer = Vector3.Distance(transform.position, player.position);
+
+        // 1. 听觉判定：玩家靠得太近，直接察觉
+        if (distToPlayer <= hearingRadius) return true;
+
+        // 2. 视觉判定：在视线距离内
+        if (distToPlayer <= sightDistance)
         {
-            elapsed += Time.deltaTime;
+            Vector3 dirToPlayer = (player.position - transform.position).normalized;
+            float angle = Vector3.Angle(transform.forward, dirToPlayer);
 
-            // 获取动画机当前状态
-            bool isPlayingHitAnim = false;
-            if (anim != null)
+            // 在前方扇形夹角内
+            if (angle < fovAngle / 2f)
             {
-                AnimatorStateInfo state = anim.GetCurrentAnimatorStateInfo(0);
-                // 判断是不是还在播挨打、击飞、倒地动画
-                isPlayingHitAnim = state.IsName("Hit") || state.IsName("DieBySkill") || state.IsName("KnockUp");
+                // 射线检测：确保中间没有墙壁或大石头挡着！
+                Vector3 eyePos = transform.position + Vector3.up * 1.5f;
+                Vector3 playerChest = player.position + Vector3.up * 1.2f;
+                if (!Physics.Linecast(eyePos, playerChest, obstacleMask))
+                {
+                    return true;
+                }
             }
-
-            // 解除硬直的两个条件同时满足：
-            // A. 保底的物理推力时间（currentStunDuration）必须结束，防止推力还没生效就解除
-            // B. 受击动画必须播完（已经切回了 Idle 或 Chase 等）
-            if (elapsed >= currentStunDuration && !isPlayingHitAnim)
-            {
-                break; // 动画播完了，立刻跳出循环，绝不发呆！
-            }
-
-            // 兜底防卡死锁（如果超过 5 秒强行解锁）
-            if (elapsed > 5f) break;
-
-            yield return null;
         }
+        return false;
+    }
 
-        // 3. 彻底解除封印
-        isHitStunned = false; 
+    // ==========================================
+    // 物理与表现
+    // ==========================================
+    private IEnumerator AppearRoutine()
+    {
+        currentState = EnemyState.Idle; // 临时切入空状态防止重复触发
         
-        if (currentHealth > 0) 
+        if (appearEffect != null) Instantiate(appearEffect, transform.position, Quaternion.identity);
+        SetVisible(true);
+        TogglePhysics(true);
+        hasAppeared = true;
+
+        // 刚跳出来时，先发呆 1.5 秒营造压迫感，然后进入巡逻
+        yield return new WaitForSeconds(1.5f);
+        
+        // 发呆结束后，如果玩家贴脸了直接追，否则按计划巡逻
+        currentState = CanSeeOrHearPlayer() ? EnemyState.Chase : (patrolPoints.Length > 0 ? EnemyState.Patrol : EnemyState.Idle);
+    }
+
+    private void HandleHitPhysics()
+    {
+        // 硬直和击飞期间，强行关掉导航，交给 CharacterController 处理物理击退！
+        if (agent.enabled) agent.enabled = false;
+
+        if (isSuspended) verticalVelocity = 0f;
+        else
         {
-            currentState = EnemyState.Idle; 
-            if (controller != null)
-            {
-                controller.enabled = false;
-                controller.height = originalHeight; 
-                controller.radius = originalRadius;
-                controller.center = originalCenter;
-                controller.stepOffset = originalStepOffset;
-                transform.position += new Vector3(0, 0.05f, 0); // 略微防卡
-                controller.enabled = true; // 🌟 重新接管双腿
-            }
-            CapsuleCollider solidCollider = GetComponent<CapsuleCollider>();
-            if (solidCollider != null) solidCollider.enabled = true; 
+            if (controller.isGrounded && verticalVelocity < 0) verticalVelocity = 0;
+            verticalVelocity += gravity * Time.deltaTime;
         }
-        
-        //Debug.Log($"敌人硬直彻底结束 (耗时 {elapsed:F2} 秒)，瞬间恢复战斗姿态！");
-    }
 
-    // 动画事件：造成伤害
-    public void DealDamage()
-    {
-        // 球形检测参数
-        float attackRadius = 1f;  // 与玩家闪避距离匹配
-        Vector3 attackPoint = transform.position + transform.forward * 1.5f + Vector3.up * 1f;
-    
-        Collider[] hitColliders = Physics.OverlapSphere(attackPoint, attackRadius);
-        foreach (var hit in hitColliders)
+        Vector3 velocity = new Vector3(0, verticalVelocity, 0);
+
+        if (impact.magnitude > 0.1f)
         {
-            EldenRingMovement playerScript = hit.GetComponent<EldenRingMovement>();
-            if (playerScript != null)
-            {
-                //计算出怪物推向玩家的纯水平物理方向
-                Vector3 knockbackDir = (playerScript.transform.position - transform.position).normalized;
-                knockbackDir.y = 0;
-                // 假设怪物普攻击退力为 8f
-                float enemyPushForce = 8f;
-
-                if (playerScript.isBlocking)
-                    playerScript.TakeBlockDamage(attackDamage, knockbackDir, enemyPushForce * 0.5f); // 玩家格挡，退一点点
-                else
-                    playerScript.TakeDamage(attackDamage, knockbackDir, enemyPushForce); // 玩家没防住，被狠狠击退
-                //Debug.Log("敌人造成伤害（球形检测）");
-                break;
-            }
+            velocity += impact;
+            float decay = (isDead || impact.magnitude > 10f) ? 3f : 10f;
+            impact = Vector3.Lerp(impact, Vector3.zero, Time.deltaTime * decay);
         }
+
+        if (controller.enabled) controller.Move(velocity * Time.deltaTime);
+        else transform.position += velocity * Time.deltaTime;
     }
 
-    // 动画事件：攻击结束
-    public void OnAttackFinished()
+    private void SetVisible(bool visible)
     {
-        if (currentState == EnemyState.Hit) return;
-        if (isHitStunned) return;
-        
-        float distance = Vector3.Distance(transform.position, player.position);
-        currentState = distance <= attackDistance ? EnemyState.Attack : EnemyState.Chase;
-        
-        if (currentState == EnemyState.Attack) anim.SetTrigger("Attack");
+        foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = visible;
     }
 
-    // 动画事件：受击结束
-    public void OnHitFinished()
+    private void TogglePhysics(bool isActive)
     {
-        if (isHitStunned) return;
-        currentState = EnemyState.Idle;
+        if (controller != null) controller.enabled = isActive;
+        if (agent != null) agent.enabled = isActive;
+        Collider col = GetComponent<Collider>();
+        if (col != null) col.enabled = isActive;
     }
 
-    private void UpdateAnimator(float targetX, float targetY)
+    private void UpdateAnimator()
     {
         if (anim == null) return;
         
-        currentDirection = Mathf.Lerp(currentDirection, targetX, Time.deltaTime * 5f);
-        currentSpeed = Mathf.Lerp(currentSpeed, targetY, Time.deltaTime * 5f);
+        // 直接读取 NavMeshAgent 算好的真实速度！
+        float targetSpeed = (agent != null && agent.enabled && !agent.isStopped) ? agent.velocity.magnitude : 0f;
+        
+        currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, Time.deltaTime * 10f);
+        anim.SetFloat("Speed", currentSpeed / runSpeed); // 归一化到 0~1 匹配动画树
 
-        anim.SetFloat("Direction", currentDirection);
-        anim.SetFloat("Speed", currentSpeed);
-
-        bool isMoving = Mathf.Abs(targetY) > 0.1f || Mathf.Abs(targetX) > 0.1f;
-        bool isRunning = Mathf.Abs(targetY) > 1f;
-
+        bool isMoving = currentSpeed > 0.1f;
         anim.SetBool("IsMoving", isMoving);
-        anim.SetBool("IsRunning", isRunning);
+        anim.SetBool("IsRunning", currentSpeed > walkSpeed + 0.5f);
     }
 
     private void FaceTarget(Vector3 targetPos)
@@ -732,88 +428,329 @@ public class BasicEnemyTest : MonoBehaviour
         dir.y = 0;
         if (dir != Vector3.zero)
         {
-            Quaternion lookRot = Quaternion.LookRotation(dir);
-            transform.rotation = Quaternion.Slerp(transform.rotation, lookRot, Time.deltaTime * 10f);
-        }
-    }
-    
-    void OnDrawGizmosSelected()
-    {
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, chaseDistance);
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, attackDistance);
-        
-        if (Application.isPlaying && knockbackDirection.magnitude > 0.1f)
-        {
-            Gizmos.color = Color.blue;
-            Gizmos.DrawRay(transform.position, knockbackDirection * 2f);
+            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(dir), Time.deltaTime * 8f);
         }
     }
 
-    // 被玩家在赐福点休息时调用
+    // ==========================================
+    // 受击与战斗接口 (与原本完全保持一致，零缝合感)
+    // ==========================================
+    public void TakeDamageWithDirection(Vector3 direction, float force, int rawDamage, int damageType = 0)
+    {
+        isSuspended = false;
+        if (currentHealth <= 0) return;
+
+        float damageReduction = 100f / (100f + enemyDefense);
+        int finalDamage = Mathf.Max(1, Mathf.RoundToInt(rawDamage * damageReduction));
+
+        currentHealth -= finalDamage;  
+        if (healthSlider != null) healthSlider.value = currentHealth;
+
+        if (DamageTextPoolManager.Instance != null)
+        {
+            DamageTextPoolManager.Instance.ShowDamageText(transform.position + Vector3.up * 2.0f, finalDamage, damageType);
+        }
+
+        knockbackDirection = direction;
+        knockbackDirection.y = 0;
+        impact = knockbackDirection * force; 
+
+        if (currentHealth <= 0)
+        {
+            Die(damageType == 2);
+            return;
+        }
+
+        currentState = EnemyState.Hit;
+        isHitStunned = true;
+        if (anim != null)
+        {
+            anim.ResetTrigger("Cast"); // 被打断时，清空施法指令
+            anim.ResetTrigger("Attack"); 
+            anim.SetTrigger("Hit");
+        } 
+
+        currentStunDuration = hitStunDuration; 
+        StopCoroutine("EndHitStun"); 
+        StartCoroutine("EndHitStun");
+    }
+
+    public void TakeKnockbackWithUp(Vector3 direction, float force, int rawDamage, float upForce = 5f, int damageType = 0, float stunTime = 0.5f)
+    {
+        if (isDead && upForce >= 0) return; 
+        isSuspended = false; 
+
+        if (!isDead)
+        {
+            float damageReduction = 100f / (100f + enemyDefense);
+            int finalDamage = Mathf.Max(1, Mathf.RoundToInt(rawDamage * damageReduction));
+            currentHealth -= finalDamage;
+            if (healthSlider != null) healthSlider.value = currentHealth;
+            if (DamageTextPoolManager.Instance != null) DamageTextPoolManager.Instance.ShowDamageText(transform.position + Vector3.up * 2.0f, finalDamage, damageType);
+        }
+        
+        knockbackDirection = direction;
+        knockbackDirection.y = 0;
+
+        if (stunTime > 1.0f || isDead || upForce < 0) 
+        {
+            if (controller != null) 
+            { 
+                controller.enabled = false; 
+                controller.height = 0.2f; controller.radius = 0.01f; controller.center = new Vector3(0, 0.1f, 0); controller.stepOffset = 0f; 
+            }
+            Collider col = GetComponent<Collider>(); if (col != null) col.enabled = false;
+        }
+
+        if (upForce < 0)
+        {
+           if (Physics.Raycast(transform.position + Vector3.up, Vector3.down, out RaycastHit groundHit, 20f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                if (controller != null) controller.enabled = false;
+                transform.position = groundHit.point; 
+            }
+            impact = knockbackDirection * force;
+            verticalVelocity = -10f; 
+        }
+        else impact = knockbackDirection * force + Vector3.up * upForce;
+
+        if (currentHealth <= 0)
+        {
+            if (isDead && anim != null && upForce < 0) anim.SetTrigger("DieBySkill"); 
+            Die(true); return;
+        }
+
+        if (anim != null) 
+        {
+            anim.ResetTrigger("Cast"); // 被打断时，清空施法指令
+            anim.ResetTrigger("Attack"); 
+        }
+
+        if (stunTime > 1.0f) anim.SetTrigger("DieBySkill"); else anim.SetTrigger("Hit");
+        currentState = EnemyState.Hit;
+        isHitStunned = true;
+        currentStunDuration = stunTime;
+        StopCoroutine(nameof(EndHitStun)); StartCoroutine(nameof(EndHitStun));
+    }
+
+    private void EndMagicCast()
+    {
+        if (currentState == EnemyState.MagicCast) currentState = EnemyState.Chase;
+    }   
+
+    public void TakeLaunchDamage(Vector3 direction, float force, int rawDamage, float upForce = 8f, int damageType = 2)
+    {
+        if (!isDead)
+        {
+            int finalDamage = Mathf.Max(1, Mathf.RoundToInt(rawDamage * (100f / (100f + enemyDefense))));
+            currentHealth -= finalDamage;
+            if (healthSlider != null) healthSlider.value = currentHealth;
+            if (DamageTextPoolManager.Instance != null) DamageTextPoolManager.Instance.ShowDamageText(transform.position + Vector3.up * 2.0f, finalDamage, damageType);
+        }
+
+        if (controller != null)
+        {
+            controller.enabled = false; controller.height = 0.2f; controller.radius = 0.01f; controller.center = new Vector3(0, 0.1f, 0); controller.stepOffset = 0f; controller.enabled = true;
+        }
+        Collider col = GetComponent<Collider>(); if (col != null) col.enabled = false;
+
+        knockbackDirection = direction; knockbackDirection.y = 0;
+        impact = knockbackDirection * force + Vector3.up * upForce;
+        currentState = EnemyState.Hit; isHitStunned = true; isSuspended = true;
+
+        if (currentHealth <= 0 && !isDead) { Die(true); return; }
+        if (anim != null) { if (isDead) anim.SetTrigger("DieBySkill"); else anim.SetTrigger("KnockUp"); }
+
+        currentStunDuration = 1.0f; 
+        StopCoroutine(nameof(EndHitStun)); StartCoroutine(nameof(EndHitStun));
+    }
+
+    void Die(bool isSkillDeath = false)
+    {
+        if (isDead) return;
+        isDead = true;
+
+        TaskManager tm = FindObjectOfType<TaskManager>();
+        if (tm != null) tm.ReportEnemyKilled();
+
+        EldenRingMovement playerMovement = player.GetComponent<EldenRingMovement>();
+        if (playerMovement != null) { playerMovement.AddXP(xpReward); playerMovement.AddGold(goldReward); } 
+
+        if (anim != null) { if(isSkillDeath) anim.SetTrigger("DieBySkill"); else anim.SetTrigger("Die"); }
+
+        currentState = EnemyState.Hit; 
+        isHitStunned = true;
+        if (uiCanvas != null) uiCanvas.gameObject.SetActive(false);
+
+        TogglePhysics(false);
+        StartCoroutine(DisableAfterDeath());
+    }
+
+    private IEnumerator DisableAfterDeath()
+    {
+        yield return new WaitForSeconds(2.5f); 
+        TogglePhysics(false);
+        gameObject.SetActive(false); 
+    }
+
+    System.Collections.IEnumerator EndHitStun()
+    {
+        yield return new WaitForEndOfFrame(); yield return new WaitForEndOfFrame();
+        float elapsed = 0f;
+
+        while (true)
+        {
+            elapsed += Time.deltaTime;
+            bool isPlayingHitAnim = false;
+            if (anim != null)
+            {
+                AnimatorStateInfo state = anim.GetCurrentAnimatorStateInfo(0);
+                isPlayingHitAnim = state.IsName("Hit") || state.IsName("DieBySkill") || state.IsName("KnockUp");
+            }
+
+            if (elapsed >= currentStunDuration && !isPlayingHitAnim) break;
+            if (elapsed > 5f) break;
+            yield return null;
+        }
+
+        isHitStunned = false; 
+        if (currentHealth > 0) 
+        {
+            // 恢复物理和导航
+            TogglePhysics(true);
+            if (controller != null)
+            {
+                controller.enabled = false;
+                controller.height = originalHeight; controller.radius = originalRadius; controller.center = originalCenter; controller.stepOffset = originalStepOffset;
+                transform.position += new Vector3(0, 0.05f, 0); 
+                controller.enabled = true; 
+            }
+            
+            // 硬直结束后，直接进入警戒追击状态！
+            currentState = EnemyState.Chase; 
+        }
+    }
+
+    // ==========================================
+    // 动画事件与其他接口
+    // ==========================================
+    public void DealDamage()
+    {
+        float attackRadius = 1f;  
+        Vector3 attackPoint = transform.position + transform.forward * 1.5f + Vector3.up * 1f;
+        Collider[] hitColliders = Physics.OverlapSphere(attackPoint, attackRadius);
+        foreach (var hit in hitColliders)
+        {
+            EldenRingMovement playerScript = hit.GetComponent<EldenRingMovement>();
+            if (playerScript != null)
+            {
+                Vector3 knockbackDir = (playerScript.transform.position - transform.position).normalized; knockbackDir.y = 0;
+                float enemyPushForce = 8f;
+                if (playerScript.isBlocking) playerScript.TakeBlockDamage(attackDamage, knockbackDir, enemyPushForce * 0.5f); 
+                else playerScript.TakeDamage(attackDamage, knockbackDir, enemyPushForce); 
+                break;
+            }
+        }
+    }
+
+    public void OnAttackFinished()
+    {
+        if (currentState == EnemyState.Hit || isHitStunned) return;
+        
+        // 攻击完后，如果玩家还在圈内继续打，否则追！
+        currentState = Vector3.Distance(transform.position, player.position) <= attackDistance ? EnemyState.Attack : EnemyState.Chase;
+        if (currentState == EnemyState.Attack) anim.SetTrigger("Attack");
+    }
+
+    //动画事件：施法动作彻底结束
+    public void OnCastFinished()
+    {
+        // 只有当前确实在施法状态时才处理（防幽灵事件）
+        if (currentState == EnemyState.MagicCast)
+        {
+            // 施法结束，解除定身，切回追击状态！
+            currentState = EnemyState.Chase;
+        }
+    }
+
+    public void OnHitFinished() { /* 逻辑已转移至协程 */ }
+
     public void RespawnEnemy()
     {
         isDead = false;
-        StopAllCoroutines(); // 打断所有正在运行的协程（比如还没播完的死亡协程）
-        
-        gameObject.SetActive(true); // 唤醒模型
+        StopAllCoroutines(); 
+        gameObject.SetActive(true); 
 
-        // 篝火复活时，同样恢复物理胶囊体
         if (controller != null)
         {
             controller.enabled = false; 
-            controller.height = originalHeight;
-            controller.radius = originalRadius;
-            controller.center = originalCenter;
-            controller.stepOffset = originalStepOffset;
+            controller.height = originalHeight; controller.radius = originalRadius; controller.center = originalCenter; controller.stepOffset = originalStepOffset;
         }
         
-        // 恢复生命值
         currentHealth = maxHealth;
         if (healthSlider != null) healthSlider.value = currentHealth;
         
-        // 恢复位置和朝向
-        if (controller != null) controller.enabled = false; // 瞬移前先关控制器
+        TogglePhysics(false); 
         transform.position = initialPosition;
         transform.rotation = initialRotation;
         
-        // 恢复初始隐藏逻辑
-        startHidden = initialHiddenState;
         if (startHidden)
         {
             SetVisible(false);
-            if (controller != null) controller.enabled = false;
-            GetComponent<Collider>().enabled = false;
-            currentState = EnemyState.Idle;
+            TogglePhysics(false);
+            currentState = EnemyState.Hidden;
+            hasAppeared = false;
         }
         else
         {
+            hasAppeared = true;
             SetVisible(true);
-            if (controller != null) controller.enabled = true;
-            GetComponent<Collider>().enabled = true;
-            currentState = autoChaseOnAppear ? EnemyState.Chase : EnemyState.Patrol;
+            TogglePhysics(true);
+            currentState = patrolPoints.Length > 0 ? EnemyState.Patrol : EnemyState.Idle;
         }
 
-        // 重置动画
         if (anim != null)
         {
-            // 1. 彻底重启整个动画机，它会自动回到默认的橘黄色节点（不管那个节点叫什么名字！）
             anim.Rebind();
-            anim.Update(0f); // 强制引擎在这一帧立刻刷新画面，消除 T-pose 闪烁
-
-            // 2. 清理所有动画参数，防止残留导致乱跑
-            currentDirection = 0f;
-            currentSpeed = 0f;
-            anim.SetFloat("Direction", 0f);
-            anim.SetFloat("Speed", 0f);
-            anim.SetBool("IsMoving", false);
-            anim.SetBool("IsRunning", false);
+            anim.Update(0f); 
+            currentDirection = 0; currentSpeed = 0;
+            anim.SetFloat("Direction", 0); anim.SetFloat("Speed", 0);
+            anim.SetBool("IsMoving", false); anim.SetBool("IsRunning", false);
         }
 
         isHitStunned = false;
+    }
 
-        CapsuleCollider solidCollider = GetComponent<CapsuleCollider>();
-        if (solidCollider != null) solidCollider.enabled = true;
+    // 绘制视野扇形和巡逻点辅助线
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, appearDistance);
+        
+        Gizmos.color = Color.blue;
+        Gizmos.DrawWireSphere(transform.position, hearingRadius);
+
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, attackDistance);
+
+        // 绘制前方扇形视野
+        Vector3 leftBoundary = Quaternion.Euler(0, -fovAngle / 2f, 0) * transform.forward * sightDistance;
+        Vector3 rightBoundary = Quaternion.Euler(0, fovAngle / 2f, 0) * transform.forward * sightDistance;
+        Gizmos.color = new Color(1, 0, 0, 0.3f);
+        Gizmos.DrawRay(transform.position + Vector3.up, leftBoundary);
+        Gizmos.DrawRay(transform.position + Vector3.up, rightBoundary);
+        Gizmos.DrawRay(transform.position + Vector3.up, transform.forward * sightDistance);
+
+        // 画出巡逻路线
+        if (patrolPoints != null && patrolPoints.Length > 1)
+        {
+            Gizmos.color = Color.green;
+            for (int i = 0; i < patrolPoints.Length; i++)
+            {
+                Transform p1 = patrolPoints[i];
+                Transform p2 = patrolPoints[(i + 1) % patrolPoints.Length];
+                if (p1 != null && p2 != null) Gizmos.DrawLine(p1.position, p2.position);
+            }
+        }
     }
 }

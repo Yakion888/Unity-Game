@@ -1,52 +1,36 @@
 using UnityEngine;
+using System.Collections;
 
+// 彻底剥夺它的 Update 权利，变成听主脚本指挥的纯战技组件！
 public class MonsterLightningAttack : MonoBehaviour
 {
     [Header("闪电特效")]
-    public GameObject lightningPrefab;       // 落地闪电特效
+    public GameObject lightningPrefab;       
 
     [Header("伤害配置")]
     public float lightningDamage = 35f;
-    public float isBlockinglightningDamage = 20f;
     public float lightningRadius = 2.5f;
     public float lightningPushForce = 15f;
 
-    [Header("时间&距离")]
-    public float attackTriggerDistance = 16f; // 触发距离
-    public float warningTime = 2f;           // 预警2秒
-    public float attackCooldown = 8f;       // 技能冷却
-
     [Header("动态警示圈设置")]
-    public Color circleColor = Color.red;    // 圈颜色
-    public float circleLineWidth = 0.15f;   // 线条粗细
-    public int circleSegment = 36;          // 圆圈分段数(越高越圆)
+    public Color circleColor = Color.red;    
+    public float circleLineWidth = 0.15f;   
+    public int circleSegment = 36;          
 
+    private LineRenderer warningCircle;     
     private Transform playerTransform;
-    private float currentCooldown;
-    private float warningTimer;
-    private bool isWarning;
-    private Vector3 targetGroundPos;
-    private LineRenderer warningCircle;     // 代码生成的画线组件
+    private BasicEnemyTest enemyMaster;
 
     void Start()
     {
-        // 查找玩家
-        GameObject player = GameObject.FindWithTag("Player");
-        if (player != null)
-        {
-            playerTransform = player.transform;
-        }
-        else
-        {
-            Debug.LogError("未找到Tag为Player的物体！");
-        }
+        enemyMaster = GetComponent<BasicEnemyTest>();
+        playerTransform = GameObject.FindWithTag("Player")?.transform;
 
-        // 自动创建画线物体 + LineRenderer（纯代码生成，不用预制）
         GameObject circleObj = new GameObject("WarningCircle");
-        circleObj.transform.SetParent(transform);
+        circleObj.transform.SetParent(null); // 不要作为子物体，防止随怪物移动
         warningCircle = circleObj.AddComponent<LineRenderer>();
         
-        // 初始化画线参数
+        warningCircle.material = new Material(Shader.Find("Sprites/Default"));
         warningCircle.enabled = false;
         warningCircle.useWorldSpace = true;
         warningCircle.startColor = circleColor;
@@ -54,113 +38,101 @@ public class MonsterLightningAttack : MonoBehaviour
         warningCircle.startWidth = circleLineWidth;
         warningCircle.endWidth = circleLineWidth;
         warningCircle.positionCount = circleSegment + 1;
-
-        // 状态初始化
-        currentCooldown = 0;
-        warningTimer = 0;
-        isWarning = false;
     }
 
-    void Update()
+    // 由怪物主脚本调用！
+    public void ExecuteLightningStrike()
     {
-        // 冷却倒计时
-        if (currentCooldown > 0)
-            currentCooldown -= Time.deltaTime;
+        StartCoroutine(LightningRoutine());
+    }
 
-        if (playerTransform == null) return;
+    private IEnumerator LightningRoutine()
+    {
+        if (playerTransform == null) yield break;
 
-        float distance = Vector3.Distance(transform.position, playerTransform.position);
-        bool playerInRange = distance <= attackTriggerDistance;
+        warningCircle.enabled = true;
+        Vector3 targetPos = playerTransform.position;
 
-        // 离开范围 / 冷却中：关闭警示圈、重置状态
-        if (!playerInRange || currentCooldown > 0)
+        // 【节奏一：死亡追踪期 - 1秒】
+        // 圈圈死死跟着玩家，给玩家极大的压迫感！
+        float trackTimer = 0f;
+        while (trackTimer < 1.0f)
         {
-            warningCircle.enabled = false;
-            isWarning = false;
-            warningTimer = 0;
-            return;
-        }
-
-        // 开始预警
-        if (!isWarning)
-        {
-            StartWarning();
-        }
-
-        // 预警计时
-        if (isWarning)
-        {
-            warningTimer += Time.deltaTime;
-            DrawWarningCircle(); // 实时绘制地面圆圈
-
-            // 预警结束，释放闪电
-            if (warningTimer >= warningTime)
+            // 如果怪物在这个期间被打断/死了，直接取消施法！
+            if (enemyMaster.currentState == BasicEnemyTest.EnemyState.Hit || enemyMaster.isDead)
             {
-                SpawnLightningAndDamage();
                 warningCircle.enabled = false;
-                isWarning = false;
-                warningTimer = 0;
-                currentCooldown = attackCooldown;
+                yield break;
             }
+
+            trackTimer += Time.deltaTime;
+            
+            // 射线贴地
+            if (Physics.Raycast(playerTransform.position + Vector3.up, Vector3.down, out RaycastHit hit, 40f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                targetPos = hit.point;
+            }
+            DrawWarningCircle(targetPos);
+            yield return null;
         }
-    }
 
-    // 开启预警
-    void StartWarning()
-    {
-        isWarning = true;
-        warningTimer = 0;
-
-        // 射线取地面落点
-        Vector3 rayStart = playerTransform.position + Vector3.up;
-        if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, 40f))
+        // 【节奏二：死锁爆破期 - 0.5秒】
+        // 圈圈不再移动，颜色变亮闪烁，告诉玩家：立刻翻滚！
+        warningCircle.startColor = Color.yellow;
+        warningCircle.endColor = Color.yellow;
+        
+        float lockTimer = 0f;
+        while (lockTimer < 0.5f)
         {
-            targetGroundPos = hit.point;
-            warningCircle.enabled = true;
+            // 同样，如果怪物被打断，法术取消
+            if (enemyMaster.currentState == BasicEnemyTest.EnemyState.Hit || enemyMaster.isDead)
+            {
+                warningCircle.enabled = false;
+                warningCircle.startColor = circleColor; warningCircle.endColor = circleColor;
+                yield break;
+            }
+            lockTimer += Time.deltaTime;
+            yield return null;
         }
-    }
 
-    // 代码绘制地面圆形圈
-    void DrawWarningCircle()
-    {
-        float radius = lightningRadius;
-        for (int i = 0; i <= circleSegment; i++)
+        // 【节奏三：天罚降临】
+        warningCircle.enabled = false;
+        warningCircle.startColor = circleColor; warningCircle.endColor = circleColor; // 恢复颜色
+
+        if (lightningPrefab != null)
         {
-            float rad = Mathf.Deg2Rad * (i * 360f / circleSegment);
-            float x = Mathf.Cos(rad) * radius;
-            float z = Mathf.Sin(rad) * radius;
-            Vector3 pos = targetGroundPos + new Vector3(x, 0.05f, z); // y抬高一点防贴地闪烁
-            warningCircle.SetPosition(i, pos);
+            GameObject lightning = Instantiate(lightningPrefab, targetPos, Quaternion.identity);
+            Destroy(lightning, 3f);
         }
-    }
 
-    // 生成闪电 + 造成伤害
-    void SpawnLightningAndDamage()
-    {
-        if (lightningPrefab == null) return;
-        GameObject lightning = Instantiate(lightningPrefab, targetGroundPos, Quaternion.identity);
-        Destroy(lightning, 3f);
-
-        Collider[] hitColliders = Physics.OverlapSphere(targetGroundPos, lightningRadius);
+        // 伤害判定
+        Collider[] hitColliders = Physics.OverlapSphere(targetPos, lightningRadius);
         foreach (var col in hitColliders)
         {
             EldenRingMovement playerScript = col.GetComponent<EldenRingMovement>();
             if (playerScript != null)
             {
-                Vector3 knockbackDir = (playerScript.transform.position - targetGroundPos).normalized;
-                knockbackDir.y = 0;
-
-                if (playerScript.isBlocking)
-                {
-                    playerScript.TakeBlockDamage((int)isBlockinglightningDamage, knockbackDir, lightningPushForce * 0.5f);
-                }
-                else
-                {
-                    playerScript.TakeDamage((int)lightningDamage, knockbackDir, lightningPushForce);
-                }
-                Debug.Log("闪电命中玩家");
-                break;
+                Vector3 knockbackDir = (playerScript.transform.position - targetPos).normalized; knockbackDir.y = 0;
+                if (playerScript.isBlocking) playerScript.TakeBlockDamage((int)(lightningDamage * 0.5f), knockbackDir, lightningPushForce * 0.5f);
+                else playerScript.TakeDamage((int)lightningDamage, knockbackDir, lightningPushForce);
             }
+        }
+
+        // 【核心修复】：闪电劈完后，如果怪物还在施法状态，强行把他一脚踹回追逐状态
+        // 彻底抛弃不可靠的动画事件！
+        if (enemyMaster != null && enemyMaster.currentState == BasicEnemyTest.EnemyState.MagicCast)
+        {
+            enemyMaster.currentState = BasicEnemyTest.EnemyState.Chase;
+        }
+    }
+
+    void DrawWarningCircle(Vector3 center)
+    {
+        for (int i = 0; i <= circleSegment; i++)
+        {
+            float rad = Mathf.Deg2Rad * (i * 360f / circleSegment);
+            Vector3 pos = center + new Vector3(Mathf.Cos(rad) * lightningRadius, 0.05f, Mathf.Sin(rad) * lightningRadius);
+            warningCircle.SetPosition(i, pos);
         }
     }
 }
