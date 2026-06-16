@@ -55,6 +55,13 @@ ModelImporter:
       bodyMask: 01000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
       curves: []
       events:
+      - time: 0.116279066
+        functionName: PlayHeavyAttackVoice
+        data: 
+        objectReferenceParameter: {instanceID: 0}
+        floatParameter: 0
+        intParameter: 0
+        messageOptions: 0
       - time: 0.2870115
         functionName: PlayAttackSwing
         data: 
@@ -69,6 +76,13 @@ ModelImporter:
         floatParameter: 0
         intParameter: 0
         messageOptions: 0
+      - time: 0.4377964
+        functionName: Event_OpenComboWindow
+        data: 
+        objectReferenceParameter: {instanceID: 0}
+        floatParameter: 0
+        intParameter: 0
+        messageOptions: 0
       - time: 0.45465276
         functionName: SpawnHeavyEffect
         data: 
@@ -76,15 +90,15 @@ ModelImporter:
         floatParameter: 0
         intParameter: 2
         messageOptions: 0
-      - time: 1
-        functionName: OnAttackFinished
+      - time: 0.79711705
+        functionName: Event_CloseComboWindow
         data: 
         objectReferenceParameter: {instanceID: 0}
         floatParameter: 0
         intParameter: 0
         messageOptions: 0
-      - time: 0.116279066
-        functionName: PlayHeavyAttackVoice
+      - time: 0.99605525
+        functionName: OnAttackFinished
         data: 
         objectReferenceParameter: {instanceID: 0}
         floatParameter: 0

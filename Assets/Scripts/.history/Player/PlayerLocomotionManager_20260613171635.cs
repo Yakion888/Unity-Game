@@ -1,7 +1,7 @@
 using UnityEngine;
 
 // ==========================================
-// 移动、重力与物理表现引擎
+// 工业级架构：移动、重力与物理表现引擎
 // ==========================================
 public class PlayerLocomotionManager : MonoBehaviour
 {

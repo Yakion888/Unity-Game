@@ -33,6 +33,8 @@ public class BasicEnemyTest : MonoBehaviour
     [Header("References")]
     public Transform player;
 
+    [Header("战斗特效")]
+    public GameObject damageTextPrefab; // 拖入刚才做好的漂字预制体
 
     // ========锁定聚焦点 =======
     [Header("锁定设置")]
@@ -376,8 +378,9 @@ public class BasicEnemyTest : MonoBehaviour
         if (healthSlider != null) healthSlider.value = currentHealth;
 
         // 生成伤害漂字
-        if (DamageTextPoolManager.Instance != null)
+        if (damageTextPrefab != null)
         {
+            // 在敌人头顶 1.5 米处生成
             Vector3 textPos = transform.position + Vector3.up * 2.0f;
             DamageTextPoolManager.Instance.ShowDamageText(textPos, finalDamage, damageType);
         }
@@ -471,11 +474,11 @@ public class BasicEnemyTest : MonoBehaviour
             currentHealth -= finalDamage;
             if (healthSlider != null) healthSlider.value = currentHealth;
 
-            if (DamageTextPoolManager.Instance != null)
-        {
-            Vector3 textPos = transform.position + Vector3.up * 2.0f;
-            DamageTextPoolManager.Instance.ShowDamageText(textPos, finalDamage, damageType);
-        }
+            if (damageTextPrefab != null)
+            {
+                Vector3 textPos = transform.position + Vector3.up * 2.0f;
+                DamageTextPoolManager.Instance.ShowDamageText(textPos, finalDamage, damageType);
+            }
         }
         
         knockbackDirection = direction;
@@ -551,7 +554,7 @@ public class BasicEnemyTest : MonoBehaviour
             currentHealth -= finalDamage;
             if (healthSlider != null) healthSlider.value = currentHealth;
 
-            if (DamageTextPoolManager.Instance != null)
+            if (damageTextPrefab != null)
             {
                 Vector3 textPos = transform.position + Vector3.up * 2.0f;
                 DamageTextPoolManager.Instance.ShowDamageText(textPos, finalDamage, damageType);
@@ -658,7 +661,7 @@ public class BasicEnemyTest : MonoBehaviour
             if (solidCollider != null) solidCollider.enabled = true; 
         }
         
-        //Debug.Log($"敌人硬直彻底结束 (耗时 {elapsed:F2} 秒)，瞬间恢复战斗姿态！");
+        Debug.Log($"敌人硬直彻底结束 (耗时 {elapsed:F2} 秒)，瞬间恢复战斗姿态！");
     }
 
     // 动画事件：造成伤害
@@ -684,7 +687,7 @@ public class BasicEnemyTest : MonoBehaviour
                     playerScript.TakeBlockDamage(attackDamage, knockbackDir, enemyPushForce * 0.5f); // 玩家格挡，退一点点
                 else
                     playerScript.TakeDamage(attackDamage, knockbackDir, enemyPushForce); // 玩家没防住，被狠狠击退
-                //Debug.Log("敌人造成伤害（球形检测）");
+                Debug.Log("敌人造成伤害（球形检测）");
                 break;
             }
         }
@@ -798,15 +801,12 @@ public class BasicEnemyTest : MonoBehaviour
         // 重置动画
         if (anim != null)
         {
-            // 1. 彻底重启整个动画机，它会自动回到默认的橘黄色节点（不管那个节点叫什么名字！）
             anim.Rebind();
-            anim.Update(0f); // 强制引擎在这一帧立刻刷新画面，消除 T-pose 闪烁
-
-            // 2. 清理所有动画参数，防止残留导致乱跑
-            currentDirection = 0f;
-            currentSpeed = 0f;
-            anim.SetFloat("Direction", 0f);
-            anim.SetFloat("Speed", 0f);
+            anim.Play("Idle");
+            currentDirection = 0;
+            currentSpeed = 0;
+            anim.SetFloat("Direction", 0);
+            anim.SetFloat("Speed", 0);
             anim.SetBool("IsMoving", false);
             anim.SetBool("IsRunning", false);
         }

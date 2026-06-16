@@ -1,13 +1,26 @@
 using UnityEngine;
 
-// 加上这行代码，你就可以在 Unity 里像创建 Material 一样创建武器数据包了！
+// 定义技能类型枚举
+public enum WeaponSkillType
+{
+    None,
+    WaveSlash,      // 裂地剑气
+    QTEUltimate     // 终极连斩(QTE)
+}
+
+// 加上这行代码就可以在 Unity 里像创建 Material 一样创建武器数据包了
 [CreateAssetMenu(fileName = "NewWeaponData", menuName = "ARPG/武器数据包 (Weapon Data)")]
 public class WeaponDataSO : ScriptableObject
 {
+    
     [Header("基本信息")]
     public string weaponName = "狼的末路";
     public float weaponBaseAttack = 40f; // 这把武器的初始攻击力
     public GameObject weaponModelPrefab; //武器的 3D 模型预制体
+
+    // 这把武器附带的专属技能
+    [Header("专属武器技能")]
+    public WeaponSkillType exclusiveSkill = WeaponSkillType.WaveSlash;
 
     [Header("重攻击配置 (5段)")]
     public int[] heavyAttackDamage = new int[5] { 15, 20, 20, 35, 50 };

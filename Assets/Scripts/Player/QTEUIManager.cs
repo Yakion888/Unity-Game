@@ -5,8 +5,6 @@ using UnityEngine.UI; // 引入 UI 库
 
 public class QTEUIManager : MonoBehaviour
 {
-    public static QTEUIManager Instance;
-
     [Header("UI 引用")]
     public CanvasGroup qteCanvasGroup;   // 控制整体透明度
     public RectTransform qteCircle;      // 需要跳动的圆形框
@@ -26,9 +24,6 @@ public class QTEUIManager : MonoBehaviour
 
     private void Awake()
     {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
-
         // 初始隐藏
         if (qteCanvasGroup != null)
         {

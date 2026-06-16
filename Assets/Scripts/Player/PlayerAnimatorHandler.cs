@@ -19,6 +19,57 @@ public class PlayerAnimatorHandler : MonoBehaviour
     public readonly int isBlockingHash = Animator.StringToHash("IsBlocking");
     public readonly int idleIndexHash = Animator.StringToHash("IdleIndex");
 
+    public readonly int attackTrigger = Animator.StringToHash("Attack");
+    public readonly int comboTrigger = Animator.StringToHash("Combo");
+    public readonly int lightAttackTrigger = Animator.StringToHash("LightAttack");
+    public readonly int lightComboTrigger = Animator.StringToHash("LightCombo");
+    public readonly int jumpTrigger = Animator.StringToHash("Jump");
+    public readonly int dodgeTrigger = Animator.StringToHash("Dodge");
+    public readonly int hitTrigger = Animator.StringToHash("Hit");
+    public readonly int blockHitTrigger = Animator.StringToHash("BlockHit");
+    public readonly int dieTrigger = Animator.StringToHash("Die");
+
+    public readonly int castTrigger = Animator.StringToHash("Cast");
+    public readonly int ultimateTrigger = Animator.StringToHash("Ultimate");
+    public readonly int knockUpTrigger = Animator.StringToHash("KnockUp");
+
+    public readonly int attack1State = Animator.StringToHash("Attack1");
+    public readonly int attack4State = Animator.StringToHash("Attack4");
+    //把连续的动作按顺序做成哈希数组，代码里直接用下标（Index）提取！
+    public readonly int[] heavyAttackHashes = new int[] {
+        Animator.StringToHash("Attack1"),
+        Animator.StringToHash("Attack2"),
+        Animator.StringToHash("Attack3"),
+        Animator.StringToHash("Attack4"),
+        Animator.StringToHash("Attack5")
+    };
+
+    public readonly int[] lightAttackHashes = new int[] {
+        Animator.StringToHash("LightAttack1"),
+        Animator.StringToHash("LightAttack2"),
+        Animator.StringToHash("LightAttack3")
+    };
+
+    // 默认待机哈希，用于平滑收招
+    public readonly int locomotionHash = Animator.StringToHash("Locomotion");
+
+    //一键清理所有的残余 Trigger
+    public void ResetAllTriggers()
+    {
+        if (anim == null) return;
+        anim.ResetTrigger(attackTrigger);
+        anim.ResetTrigger(comboTrigger);
+        anim.ResetTrigger(lightAttackTrigger);
+        anim.ResetTrigger(lightComboTrigger);
+        anim.ResetTrigger(jumpTrigger);
+        anim.ResetTrigger(dodgeTrigger);
+        anim.ResetTrigger(hitTrigger);
+        anim.ResetTrigger(blockHitTrigger);
+        anim.ResetTrigger(castTrigger);
+        anim.ResetTrigger(ultimateTrigger);
+        anim.ResetTrigger(dieTrigger);
+    }
+
     // 初始化获取组件
     public void Initialize()
     {

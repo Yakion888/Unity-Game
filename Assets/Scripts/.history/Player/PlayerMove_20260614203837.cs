@@ -36,8 +36,6 @@ public class EldenRingMovement : MonoBehaviour
     private bool isDodging => currentState == ActionState.Dodging;
     private bool isHit => currentState == ActionState.Hit;
 
-    private float fsmStateTimer = 0f;
-
     [Header("战斗设置")]
     public float hitStopDuration = 0.05f;  // 命中停顿时间
     private float lastEventTime = 0f;    //记录上一次触发动画事件的真实时间，用于防抖
@@ -191,17 +189,13 @@ public class EldenRingMovement : MonoBehaviour
     
     
     // 攻击相关
-    // ==============================================================
-    // 动作缓冲与连段系统 (Combo Buffer System)
-    // ==============================================================
-    private bool comboPending = false;      // 玩家是否提前按下了攻击键？
-    private bool canCombo = false;          // 当前动画是否处于“允许连招”的窗口期？
-    private int currentAttackCombo = 0;     // 当前段数（0~4）
-
+    private bool comboPending;
+    private float comboPendingTime;
     private bool isProcessingAttackEnd;
-
-    //格挡相关
+    private bool lightComboPending;
+    private float lightComboPendingTime;
     public bool isBlocking;
+    private int currentAttackCombo = 0;   // 当前重攻击段数（1~5）
 
     // 技能相关
     private float castStartTime;
@@ -331,8 +325,6 @@ public class EldenRingMovement : MonoBehaviour
     {
         if (isDead || isResting) return; // 死亡或休息时锁死逻辑
 
-        fsmStateTimer += Time.deltaTime;
-
         // 1. 处理系统与UI状态
         HandleSystemAndUIState();
 
@@ -420,133 +412,112 @@ public class EldenRingMovement : MonoBehaviour
 
     private void HandleActionInputs()
     {
-        // 1. 武器切换 (按下 Tab 且处于绝对自由状态时)
+        // 1. 武器切换 (按下 Tab 且处于自由状态时)
         if (inputHandler.SwitchWeaponInput && currentState == ActionState.IdleMove)
         {
             EquipWeapon(currentWeaponIndex + 1); 
         }
 
-        // =========================================================
-        // 【架构绝杀：硬直状态拦截】
-        // 如果玩家处于 受击、死亡、闪避、放大招、放技能 的状态中，
-        // 直接 return 拦截！下面的 攻击、跳跃、格挡 全部失效！
-        // 彻底消灭满天飞的 && !isHit && !isDodging...
-        // =========================================================
-        if (currentState == ActionState.Hit || currentState == ActionState.Dead || 
-            currentState == ActionState.Dodging || currentState == ActionState.SkillCast || 
-            currentState == ActionState.Ultimate || currentState == ActionState.RunAttack)
+        // 2. 闪避
+        if (inputHandler.DodgeInput && !isDodging && !isAttacking && !isLightAttacking && !isCasting && !isHit && !isBlocking)
         {
-            return; 
+            TryDodge();
         }
 
-        // 2. 格挡 (只有在自由站立或移动时才能举盾)
+        // 3. 格挡
         bool wasBlocking = isBlocking;
-        isBlocking = inputHandler.BlockInput && currentState == ActionState.IdleMove;
+        isBlocking = inputHandler.BlockInput;
         if (isBlocking != wasBlocking)
         {
             if (isBlocking) GetComponent<IdleSelector>()?.ResetIdleTimer();
             else
             {
-                animHandler.anim.SetFloat(animHandler.idleIndexHash, 0f);
+                anim.SetFloat("IdleIndex", 0f);
                 GetComponent<IdleSelector>()?.ResetIdleTimer();
             }
         }
-        animHandler.anim.SetBool(animHandler.isBlockingHash, isBlocking);
+        anim.SetBool("IsBlocking", isBlocking);
 
-        // 3. 闪避
-        if (inputHandler.DodgeInput && currentState == ActionState.IdleMove && !isBlocking)
+        // 4. 重攻击 (鼠标左键)
+        if (inputHandler.HeavyAttackInput && !isBlocking && !isHit && !isDodging && !isCasting && !isUltimateCasting)
         {
-            TryDodge();
-            return; // 闪避优先级高，触发后直接 return
-        }
+            if (currentWeapon == null) { Debug.LogError("没有装备武器，无法攻击！"); return; } // 安全锁！
 
-        // 4. 重攻击
-        if (inputHandler.HeavyAttackInput && !isBlocking)
-        {
-            if (currentWeapon == null) return; 
-
-            // 如果当前在走/跑，直接发动第一段攻击
-            if (currentState == ActionState.IdleMove)
+            if (!isAttacking && !isLightAttacking && !isRunningAttack)
             {
-                if (locomotion.isRunning) StartRunningAttack();
-                else StartHeavyAttack(); 
+                if (isCurrentlyRunning) StartRunningAttack();
+                else StartAttack();
             }
-            // 如果已经在重击状态中了...
-            else if (currentState == ActionState.HeavyAttack)
+            else if (isAttacking && !isRunningAttack)
             {
-                // 如果当前正好处于“连击窗口期”，毫不犹豫，直接强制切到下一刀！
-                if (canCombo) 
+                if (!anim.GetCurrentAnimatorStateInfo(attackLayerIndex).IsName("Attack5"))
                 {
-                    ProceedToNextHeavyAttack();
-                }
-                // 如果还没砍中敌人（在举剑的前摇里），就把这次按键“缓存”起来！
-                else 
-                {
+                    anim.SetTrigger("Combo");
                     comboPending = true;
+                    comboPendingTime = comboInputWindow;
                 }
             }
         }
-        // 5. 轻攻击
-        else if (inputHandler.LightAttackInput && !isBlocking)
+        // 5. 轻攻击 (鼠标右键)
+        else if (inputHandler.LightAttackInput && !isBlocking && !isHit && !isDodging && !isCasting)
         {
-            if (currentWeapon == null) return; 
+            if (currentWeapon == null) { Debug.LogError("没有装备武器，无法攻击！"); return; } // 安全锁！
 
-            // 如果当前在走/跑，直接发动第一段轻击
-            if (currentState == ActionState.IdleMove) 
+            if (!isAttacking && !isLightAttacking && !isRunningAttack) StartLightAttack();
+            else if (isLightAttacking)
             {
-                StartLightAttack();
-            }
-            // 如果已经在轻击状态中了...
-            else if (currentState == ActionState.LightAttack)
-            {
-                // 如果处于“连击窗口期”，强制切到下一脚/肘！
-                if (canCombo) 
+                if (!anim.GetCurrentAnimatorStateInfo(attackLayerIndex).IsName("LightAttack3"))
                 {
-                    ProceedToNextLightAttack();
-                }
-                // 还没到判定点，缓存按键！
-                else 
-                {
-                    comboPending = true;
+                    anim.SetTrigger("LightCombo");
+                    lightComboPending = true;
+                    lightComboPendingTime = comboInputWindow;
                 }
             }
         }
 
-        // 6. 专属武器战技
-        if (inputHandler.WeaponSkillInput && currentState == ActionState.IdleMove && !isBlocking)
+        // 6. ⚔️ 专属武器战技 (统一 E 键触发)
+        if (inputHandler.WeaponSkillInput && !isAttacking && !isLightAttacking && !isBlocking && !isHit && !isCasting && !isUltimateCasting)
         {
-            if (currentWeapon == null) return; 
+            if (currentWeapon == null) { Debug.LogError("没有装备武器，无法释放战技！"); return; } // 安全锁！
 
             if (currentRage >= maxRage)
             {
                 currentRage = 0f;
                 if (rageSlider != null) rageSlider.value = currentRage;
-
-                fsmStateTimer = 0f;
                 
-                if (currentWeapon.exclusiveSkill == WeaponSkillType.WaveSlash && skillWaveSlash != null) skillWaveSlash.ExecuteSkill();
-                else if (currentWeapon.exclusiveSkill == WeaponSkillType.QTEUltimate && skillQTEUltimate != null) skillQTEUltimate.ExecuteSkill();
+                // 根据当前武器的配置，自动调用对应的技能组件
+                if (currentWeapon.exclusiveSkill == WeaponSkillType.WaveSlash && skillWaveSlash != null)
+                {
+                    skillWaveSlash.ExecuteSkill();
+                }
+                else if (currentWeapon.exclusiveSkill == WeaponSkillType.QTEUltimate && skillQTEUltimate != null)
+                {
+                    skillQTEUltimate.ExecuteSkill();
+                }
+            }
+            else
+            {
+                Debug.Log($"怒气不足！当前怒气：{Mathf.FloorToInt(currentRage)}/{maxRage}");
             }
         }
     }
 
     private void HandleStatsAndTimers()
     {
-        // 工业级 FSM 兜底机制：任何攻击动作超过 3 秒没收招，绝对是卡 Bug 了，强制重置！
-        if (currentState == ActionState.HeavyAttack || currentState == ActionState.LightAttack || 
-            currentState == ActionState.RunAttack || currentState == ActionState.SkillCast || 
-            currentState == ActionState.Ultimate)
-        {
-            if (fsmStateTimer > 3.0f)
-            {
-                Debug.LogWarning("警告：动作状态严重超时！强制解锁玩家 FSM！");
-                OnAttackFinished();
-            }
-        }
-
-
         // 交给物理引擎处理急停判定
         locomotion.HandleStopTimers(hasMoveInput);
+
+        // 连击计时
+        if (comboPendingTime > 0)
+        {
+            comboPendingTime -= Time.deltaTime;
+            if (comboPendingTime <= 0) comboPending = false;
+        }
+        if (lightComboPendingTime > 0)
+        {
+            lightComboPendingTime -= Time.deltaTime;
+            if (lightComboPendingTime <= 0) lightComboPending = false;
+        }
 
         // 动画状态与UI同步 (读取物理引擎算好的数据)
         animHandler.SyncLocomotionStates(hasMoveInput, locomotion.isRunning, locomotion.isGroundedCached, locomotion.isStopping, isAttacking, isLightAttacking, isUltimateCasting);
@@ -728,10 +699,10 @@ public class EldenRingMovement : MonoBehaviour
     
     void StartRunningAttack()
     {
-        fsmStateTimer = 0f; // 每次发动攻击，重置计时器
         if (!ConsumeStamina(runningAttackStaminaCost)) return;
         
-        comboPending = false;      
+        comboPending = false;
+        comboPendingTime = 0;
         
         // 核心：一键切换到滑行攻击状态
         currentState = ActionState.RunAttack;
@@ -760,118 +731,164 @@ public class EldenRingMovement : MonoBehaviour
         GetComponent<IdleSelector>()?.ResetIdleTimer();
     }
     
-    private void StartHeavyAttack()
+    void StartAttack()
     {
-        //完美闪避奖励判定：如果触发了奖励，下标直接变成 3（代表第 4 段攻击）
-        int comboIndex = nextHeavyAttackIsFourth ? 3 : 0; 
+        int attackComboIndex = nextHeavyAttackIsFourth ? 4 : 1;
+        float staminaCost = heavyAttackStaminaCost[attackComboIndex - 1];
+        if (!ConsumeStamina(staminaCost)) return;
 
-        float staminaCost = currentWeapon.heavyAttackStaminaCost[comboIndex];
-        if (!stats.ConsumeStamina(staminaCost)) return;
-
-        currentState = ActionState.HeavyAttack;
-        currentAttackCombo = comboIndex;     
-        canCombo = false;           
-        comboPending = false;       
-        fsmStateTimer = 0f; 
-
-        animHandler.anim.SetLayerWeight(attackLayerIndex, 1f);
-        animHandler.ResetAllTriggers(); 
-
-        // 消耗掉闪避奖励标记
         if (nextHeavyAttackIsFourth)
         {
-            nextHeavyAttackIsFourth = false;
+            nextHeavyAttackIsFourth = false;  
+            lightComboPending = false;
+            lightComboPendingTime = 0;
+            comboPending = false;
+            comboPendingTime = 0;
+            
+            // 核心：一键切换到重击状态
+            currentState = ActionState.HeavyAttack;
+            currentAttackCombo = 4;   
+            
+            anim.ResetTrigger("Attack");
+            anim.ResetTrigger("Combo");
+            anim.ResetTrigger("LightAttack");
+            anim.ResetTrigger("LightCombo");
+            anim.SetLayerWeight(attackLayerIndex, 1f);
+            
+            anim.Play(Animator.StringToHash("Attack4"), attackLayerIndex, 0f);
+            if (controller != null) controller.Move(Vector3.zero);
+            return;
         }
 
-        // 精准播放对应段数的动画
-        animHandler.anim.Play(animHandler.heavyAttackHashes[currentAttackCombo], attackLayerIndex, 0f);
-        locomotion.ResetSpeed();
-    }
-    
-    
-    private void ProceedToNextHeavyAttack()
-    {
-        if (currentAttackCombo >= animHandler.heavyAttackHashes.Length - 1) return;
-
-        float staminaCost = currentWeapon.heavyAttackStaminaCost[currentAttackCombo + 1];
-        if (!stats.ConsumeStamina(staminaCost)) return;
-
-        currentAttackCombo++;       
-        canCombo = false;           
-        comboPending = false;       
-        fsmStateTimer = 0f;
-
-        // 还原旧逻辑精髓：后续连招交给 Animator 的连线去平滑过渡！
-        animHandler.anim.SetTrigger(animHandler.comboTrigger);
-    }
-
-    // 动画事件 1：打开连击窗口（在动画帧里，加在“伤害判定点”的下一帧！）
-    public void Event_OpenComboWindow()
-    {
-        canCombo = true; 
-        
-        // 如果玩家刚才在举剑时狂点鼠标（存下了缓存），一到判定点，瞬间自动挥出下一刀！
-        if (comboPending) 
-        {
-            if (currentState == ActionState.HeavyAttack) ProceedToNextHeavyAttack();
-            else if (currentState == ActionState.LightAttack) ProceedToNextLightAttack();
-        }
-    }
-
-    // 动画事件 2：关闭连击窗口（加在动画大后摇的中间，惩罚那些按晚了的玩家）
-    public void Event_CloseComboWindow()
-    {
-        canCombo = false;
+        currentAttackCombo = 1;     
+        lightComboPending = false;
+        lightComboPendingTime = 0;
         comboPending = false;
-    }
-
-     private void StartLightAttack()
-    {
-        currentState = ActionState.LightAttack;
-        currentAttackCombo = 0;     
-        canCombo = false;           
-        comboPending = false;       
+        comboPendingTime = 0;
         
-        fsmStateTimer = 0f;
-
-        animHandler.anim.SetLayerWeight(attackLayerIndex, 1f);
-        animHandler.ResetAllTriggers();
-
-        animHandler.anim.Play(animHandler.lightAttackHashes[currentAttackCombo], attackLayerIndex, 0f);
-        locomotion.ResetSpeed();
+        // 核心：一键切换到重击状态
+        currentState = ActionState.HeavyAttack;
+        
+        anim.ResetTrigger("Attack");
+        anim.ResetTrigger("Combo");
+        anim.ResetTrigger("LightAttack");
+        anim.ResetTrigger("LightCombo");
+        anim.SetLayerWeight(attackLayerIndex, 1f);
+        
+        anim.Play(Animator.StringToHash("Attack1"), attackLayerIndex, 0f);
+        if (controller != null) controller.Move(Vector3.zero);
     }
     
-    private void ProceedToNextLightAttack()
+    void StartLightAttack()
     {
-        if (currentAttackCombo >= animHandler.lightAttackHashes.Length - 1) return;
-
-        currentAttackCombo++;       
-        canCombo = false;           
-        comboPending = false;       
-        fsmStateTimer = 0f;
-
-        // 轻击连段触发器
-        animHandler.anim.SetTrigger(animHandler.lightComboTrigger);
+        if (attackLayerIndex < 0) return;
+        
+        lightComboPending = false;
+        lightComboPendingTime = 0;
+        comboPending = false;
+        comboPendingTime = 0;
+        
+        // 核心：一键切换到轻击状态
+        currentState = ActionState.LightAttack;
+        
+        anim.SetFloat("IdleIndex", 0f);
+        anim.ResetTrigger("LightAttack");
+        anim.ResetTrigger("LightCombo");
+        anim.ResetTrigger("Attack");
+        anim.ResetTrigger("Combo");
+        
+        anim.SetLayerWeight(attackLayerIndex, 1f);
+        anim.Play("LightAttack1", attackLayerIndex, 0f);
+        
+        if (controller != null) controller.Move(Vector3.zero);
     }
-
-    // 动画事件 3：攻击彻底结束（加在动画的最后一帧）
+    
     public void OnAttackFinished()
     {
-        if (currentState != ActionState.HeavyAttack && currentState != ActionState.LightAttack && currentState != ActionState.RunAttack) return;
+        // 核心防卫：如果当前根本不是攻击状态，直接无视错误的动画事件！
+        if (currentState != ActionState.HeavyAttack && 
+            currentState != ActionState.LightAttack && 
+            currentState != ActionState.RunAttack) return;
 
-        // 解除攻击状态，归还移动权限
-        currentState = ActionState.IdleMove;
-        canCombo = false;
-        comboPending = false;
-
-        // 直接把攻击层的权重（Weight）归零！
-        // 绝不去调用 CrossFade，底层的 Base Layer 自然会接管玩家的身体！
-        if (attackLayerIndex >= 0) 
+        if (isProcessingAttackEnd) return;
+        isProcessingAttackEnd = true;
+        
+        if (currentState == ActionState.RunAttack)
         {
-            animHandler.anim.SetLayerWeight(attackLayerIndex, 0f);
+            StartCoroutine(SmoothTransitionToIdle());
+            isProcessingAttackEnd = false;
+            return;
         }
         
-        GetComponent<IdleSelector>()?.ResetIdleTimer();
+        if (anim == null) { isProcessingAttackEnd = false; return; }
+        
+        var stateInfo = anim.GetCurrentAnimatorStateInfo(attackLayerIndex);
+        
+        // ====== 轻击收招处理 ======
+        if (stateInfo.IsName("LightAttack3"))
+        {
+            currentState = ActionState.IdleMove; // 解除状态
+            lightComboPending = false;
+            lightComboPendingTime = 0;
+            if (attackLayerIndex >= 0) anim.SetLayerWeight(attackLayerIndex, 0f);
+            anim.SetFloat("IdleIndex", 0f);
+            GetComponent<IdleSelector>()?.ResetIdleTimer();
+            isProcessingAttackEnd = false;
+            return;
+        }
+        else if (stateInfo.IsName("LightAttack1") || stateInfo.IsName("LightAttack2"))
+        {
+            if (lightComboPendingTime <= 0 && !lightComboPending)
+            {
+                currentState = ActionState.IdleMove; // 解除状态
+                if (attackLayerIndex >= 0) anim.SetLayerWeight(attackLayerIndex, 0f);
+                anim.SetFloat("IdleIndex", 0f);
+            }
+            isProcessingAttackEnd = false;
+            return;
+        }
+        
+        // ====== 重击收招处理 ======
+        if (stateInfo.IsName("Attack5"))
+        {
+            currentState = ActionState.IdleMove; // 解除状态
+            if (attackLayerIndex >= 0) anim.SetLayerWeight(attackLayerIndex, 0f);
+            anim.SetFloat("IdleIndex", 0f);
+            GetComponent<IdleSelector>()?.ResetIdleTimer();
+        }
+        else if (comboPending)
+        {
+            int nextCombo = currentAttackCombo + 1;   
+            float staminaCost = (nextCombo <= heavyAttackStaminaCost.Length) 
+                            ? heavyAttackStaminaCost[nextCombo - 1] 
+                            : heavyAttackStaminaCost[heavyAttackStaminaCost.Length - 1]; 
+            
+            if (!ConsumeStamina(staminaCost))
+            {
+                comboPending = false;
+                comboPendingTime = 0;
+                currentState = ActionState.IdleMove; // 耐力不足，强行解除状态
+                if (attackLayerIndex >= 0) anim.SetLayerWeight(attackLayerIndex, 0f);
+                anim.SetFloat("IdleIndex", 0f);
+                GetComponent<IdleSelector>()?.ResetIdleTimer();
+            }
+            else
+            {
+                anim.SetTrigger("Combo");
+                comboPending = false;
+                comboPendingTime = 0;
+                currentAttackCombo++;   // 保持 HeavyAttack 状态，进入下一段！
+            }  
+        }
+        else
+        {
+            currentState = ActionState.IdleMove; // 玩家没有预输入，正常解除状态！
+            if (attackLayerIndex >= 0) anim.SetLayerWeight(attackLayerIndex, 0f);
+            anim.SetFloat("IdleIndex", 0f);
+            GetComponent<IdleSelector>()?.ResetIdleTimer();
+        }
+        
+        isProcessingAttackEnd = false;
     }
     
     // 动态武器切换系统
@@ -1054,9 +1071,10 @@ public class EldenRingMovement : MonoBehaviour
                 // 【数据驱动】：根据当前攻击状态，智能选取对应的受击火花
                 GameObject vfxToUse = hitEffect; // 全局保底白字火花
 
-                if (isAttacking && heavyAttackHitEffects != null && currentAttackCombo >= 0 && currentAttackCombo < heavyAttackHitEffects.Length)
+                if (isAttacking && heavyAttackHitEffects != null && currentAttackCombo >= 1 && currentAttackCombo <= heavyAttackHitEffects.Length)
                 {
-                    vfxToUse = heavyAttackHitEffects[currentAttackCombo];
+                    // 重击时，根据当前是第几段，拿 SO 里配好的对应的重击火花！
+                    vfxToUse = heavyAttackHitEffects[currentAttackCombo - 1];
                 }
                 else if (isLightAttacking && currentWeapon.lightAttackEffects != null && currentWeapon.lightAttackEffects.Length > 0)
                 {
@@ -1069,7 +1087,8 @@ public class EldenRingMovement : MonoBehaviour
                 SpawnHitEffect(vfxToUse, sparkPos, attachTarget);
             
                 // 【音效播放】
-                PlayAttackHit(sparkPos);
+                if (isLightAttacking) PlayLightAttackHit();
+                else if (isAttacking || isRunningAttack) PlayAttackHit();
             }
         }
 
@@ -1105,52 +1124,76 @@ public class EldenRingMovement : MonoBehaviour
     }
 
 
-    // ⚔️ 优雅重构 1：获取伤害
-    int GetCalculatedDamage()
-    {
-        float baseDamage = 10f;
-        if (isLightAttacking && currentAttackCombo < lightAttackDamage.Length) 
-            baseDamage = lightAttackDamage[currentAttackCombo];
-        else if (isAttacking && currentAttackCombo < heavyAttackDamage.Length) 
-            baseDamage = heavyAttackDamage[currentAttackCombo];
-        else if (isRunningAttack) 
-            baseDamage = runningAttackDamage;
-
-        float totalDamage = baseDamage + attackPowerBonus;
-        return Mathf.RoundToInt(totalDamage * Random.Range(0.9f, 1.1f));
-    }
-
-    // 重构 2：获取击退力
     float GetCurrentKnockbackForce()
     {
-        if (isLightAttacking && currentAttackCombo < lightAttackKnockback.Length) return lightAttackKnockback[currentAttackCombo];
-        if (isAttacking && currentAttackCombo < heavyAttackKnockback.Length) return heavyAttackKnockback[currentAttackCombo];
-        if (isRunningAttack) return runningAttackKnockback;
-        return 5f;
-    }
-
-    // 重构 3：播放攻击与受击音效 (将原本繁琐的方法合并精简)
-    public void PlayAttackSwing()
-    {
-        AudioClip[] clips = isLightAttacking ? lightAttackSwingSounds : attackSwingSounds;
-        if (clips != null && currentAttackCombo < clips.Length && clips[currentAttackCombo] != null)
-        {
-            audioSource.pitch = (isAttacking && currentAttackCombo == 3) ? 1.2f : 1f; // 第4段重击稍微提音调
-            audioSource.PlayOneShot(clips[currentAttackCombo], 0.9f);
-            StartCoroutine(ResetPitch());
-        }
-    }
-
-    public void PlayAttackHit(Vector3 hitPos)
-    {
-        AudioClip[] clips = isLightAttacking ? lightAttackHitSounds : attackHitSounds;
-        if (clips != null && currentAttackCombo < clips.Length && clips[currentAttackCombo] != null)
-        {
-            // 加上 null, true，强制变为极其震撼的 2D 贴耳音效！
-            AudioPoolManager.Instance.PlaySound(clips[currentAttackCombo], hitPos, 0.7f, null, true);
-        }
-    }
+        AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(attackLayerIndex);
     
+        // 轻攻击
+        if (isLightAttacking)
+        {
+            if (stateInfo.IsName("LightAttack1") && lightAttackKnockback.Length > 0)
+                return lightAttackKnockback[0];
+            else if (stateInfo.IsName("LightAttack2") && lightAttackKnockback.Length > 1)
+                return lightAttackKnockback[1];
+            else if (stateInfo.IsName("LightAttack3") && lightAttackKnockback.Length > 2)
+                return lightAttackKnockback[2];
+        }
+    
+        // 滑行攻击
+        if (isRunningAttack)
+        {
+            return runningAttackKnockback;
+        }
+    
+        // 重攻击（5段）
+        if (isAttacking)
+        {
+            if (stateInfo.IsName("Attack1") && heavyAttackKnockback.Length > 0)
+                return heavyAttackKnockback[0];
+            else if (stateInfo.IsName("Attack2") && heavyAttackKnockback.Length > 1)
+                return heavyAttackKnockback[1];
+            else if (stateInfo.IsName("Attack3") && heavyAttackKnockback.Length > 2)
+                return heavyAttackKnockback[2];
+            else if (stateInfo.IsName("Attack4") && heavyAttackKnockback.Length > 3)
+                return heavyAttackKnockback[3];
+            else if (stateInfo.IsName("Attack5") && heavyAttackKnockback.Length > 4)
+                return heavyAttackKnockback[4];
+        }
+    
+        return 5f; // 默认击退值
+    }
+
+    // 在 CheckAttackHit 方法中，根据当前攻击类型获取伤害值
+    int GetCalculatedDamage()
+    {
+        // 1. 获取动作的基础伤害
+        AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(attackLayerIndex);
+        float baseDamage = 10f;
+
+        if (isLightAttacking)
+        {
+            if (stateInfo.IsName("LightAttack1")) baseDamage = lightAttackDamage[0];
+            else if (stateInfo.IsName("LightAttack2")) baseDamage = lightAttackDamage[1];
+            else if (stateInfo.IsName("LightAttack3")) baseDamage = lightAttackDamage[2];
+        }
+        else if (isRunningAttack) baseDamage = runningAttackDamage;
+        else if (isAttacking)
+        {
+            if (stateInfo.IsName("Attack1")) baseDamage = heavyAttackDamage[0];
+            else if (stateInfo.IsName("Attack2")) baseDamage = heavyAttackDamage[1];
+            else if (stateInfo.IsName("Attack3")) baseDamage = heavyAttackDamage[2];
+            else if (stateInfo.IsName("Attack4")) baseDamage = heavyAttackDamage[3];
+            else if (stateInfo.IsName("Attack5")) baseDamage = heavyAttackDamage[4];
+        }
+
+        // 2. 加上属性面板的攻击力加成
+        float totalDamage = baseDamage + attackPowerBonus;
+
+        // 3. 【真实感核心】加入 ±10% 的随机浮动
+        float randomMultiplier = Random.Range(0.9f, 1.1f);
+        
+        return Mathf.RoundToInt(totalDamage * randomMultiplier);
+    }
 
      // 命中停顿协程
     System.Collections.IEnumerator HitStop()
@@ -1349,6 +1392,138 @@ public class EldenRingMovement : MonoBehaviour
     //====================================================
 
 
+    
+
+    // ========== 攻击音效（数组索引版）==========
+    
+    // 重攻击挥剑音效
+    public void PlayAttackSwing()
+    {
+        if (!isAttacking && !isLightAttacking && !isRunningAttack) return;
+        if (audioSource == null) return;
+        if (attackSwingSounds == null || attackSwingSounds.Length == 0) return;
+
+        AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(attackLayerIndex);
+        int index = -1;
+
+        // 主判断：通过动画名称
+        if (stateInfo.IsName("Attack1")) index = 0;
+        else if (stateInfo.IsName("Attack2")) index = 1;
+        else if (stateInfo.IsName("Attack3")) index = 2;
+        else if (stateInfo.IsName("Attack4")) index = 3;
+        else if (stateInfo.IsName("Attack5")) index = 4;
+
+        // 备用：如果名称匹配失败，尝试通过动画状态哈希（更稳定）
+        if (index == -1)
+        {
+            int hash = stateInfo.shortNameHash;
+            if (hash == Animator.StringToHash("Attack1")) index = 0;
+            else if (hash == Animator.StringToHash("Attack2")) index = 1;
+            else if (hash == Animator.StringToHash("Attack3")) index = 2;
+            else if (hash == Animator.StringToHash("Attack4")) index = 3;
+            else if (hash == Animator.StringToHash("Attack5")) index = 4;
+        }           
+
+        // 最终保证：如果依然失败，检查动画的 normalizedTime 是否在 0.1~0.9 之间并且之前记录的 combo 段数
+        // 但为了简单，上述哈希通常就足够了。
+
+        if (index >= 0 && index < attackSwingSounds.Length && attackSwingSounds[index] != null)
+        {
+            if (index == 3) audioSource.pitch = 1.2f;
+            else audioSource.pitch = 1f;
+            audioSource.PlayOneShot(attackSwingSounds[index], 0.9f);
+            StartCoroutine(ResetPitch());
+            //Debug.Log($"播放重攻击挥剑音效: Attack{index + 1}");
+        }
+        else
+        {
+            //Debug.LogWarning($"PlayAttackSwing 无法识别当前攻击动画: {stateInfo.fullPathHash}");
+        }
+    }
+    
+    // 重攻击击中音效
+    public void PlayAttackHit()
+    {
+        if (audioSource == null) return;
+        if (attackHitSounds == null || attackHitSounds.Length == 0) return;
+        
+        AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(attackLayerIndex);
+        int index = -1;
+        
+        if (stateInfo.IsName("Attack1")) index = 0;
+        else if (stateInfo.IsName("Attack2")) index = 1;
+        else if (stateInfo.IsName("Attack3")) index = 2;
+        else if (stateInfo.IsName("Attack4")) index = 3;
+        else if (stateInfo.IsName("Attack5")) index = 4;
+        
+        if (index >= 0 && index < attackHitSounds.Length && attackHitSounds[index] != null)
+        {
+            // 根据攻击段数设置音量
+            float volume = 1.0f;  // 默认音量
+        
+            if (index == 0)        // 第一段
+            {
+                volume = 1.2f;
+            }
+            else if (index == 1)   // 第二段
+            {
+                volume = 0.65f;
+            }
+            else if (index == 2)   // 第三段
+            {
+                volume = 0.65f;
+            }
+            else if (index == 3)   // 第四段
+            {
+                volume = 0.65f;
+            }
+            else if (index == 4)   // 第五段
+            {
+                volume = 0.65f;
+            }
+            audioSource.PlayOneShot(attackHitSounds[index], volume);
+        }
+    }
+    
+    // 轻攻击挥剑音效
+    public void PlayLightAttackSwing()
+    {
+        if (audioSource == null) return;
+        if (lightAttackSwingSounds == null || lightAttackSwingSounds.Length == 0) return;
+        
+        AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(attackLayerIndex);
+        int index = -1;
+        
+        if (stateInfo.IsName("LightAttack1")) index = 0;
+        else if (stateInfo.IsName("LightAttack2")) index = 1;
+        else if (stateInfo.IsName("LightAttack3")) index = 2;
+        
+        if (index >= 0 && index < lightAttackSwingSounds.Length && lightAttackSwingSounds[index] != null)
+        {
+            audioSource.PlayOneShot(lightAttackSwingSounds[index], 0.7f);
+            //Debug.Log($"播放轻攻击挥剑音效: LightAttack{index + 1}");
+        }
+    }
+    
+    // 轻攻击击中音效
+    public void PlayLightAttackHit()
+    {
+        if (audioSource == null) return;
+        if (lightAttackHitSounds == null || lightAttackHitSounds.Length == 0) return;
+        
+        AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(attackLayerIndex);
+        int index = -1;
+        
+        if (stateInfo.IsName("LightAttack1")) index = 0;
+        else if (stateInfo.IsName("LightAttack2")) index = 1;
+        else if (stateInfo.IsName("LightAttack3")) index = 2;
+        
+        if (index >= 0 && index < lightAttackHitSounds.Length && lightAttackHitSounds[index] != null)
+        {
+            audioSource.PlayOneShot(lightAttackHitSounds[index], 0.8f);
+        }
+    }
+
     // 滑行攻击挥剑音效（大剑破风声）
     public void PlaySlidingWhoosh()
     {
@@ -1474,16 +1649,24 @@ public class EldenRingMovement : MonoBehaviour
         // 强制结束当前攻击
         if (isAttacking || isLightAttacking || isRunningAttack || isUltimateCasting || isCasting)
         {
-            StopCoroutine("DodgeRoutine");
             currentState = ActionState.Hit;
             
+            // 【核心修复】：必须彻底清空所有连击预输入缓存，防止复苏后自动乱挥刀
+            comboPending = false;
+            comboPendingTime = 0f;
+            lightComboPending = false;
+            lightComboPendingTime = 0f;
+            isProcessingAttackEnd = false;
             targetLeftHandIKWeight = 1f; // 兜底：挨打/攻击结束/复活时，强制恢复双手握持 
 
-            animHandler.ResetAllTriggers();
+            anim.ResetTrigger("Attack");
+            anim.ResetTrigger("Combo");
+            anim.ResetTrigger("LightAttack");
+            anim.ResetTrigger("LightCombo");
             
             if (attackLayerIndex >= 0)  anim.SetLayerWeight(attackLayerIndex, 0f);   
         }
-        StopCoroutine("DodgeRoutine");
+        
         currentState = ActionState.Hit;
         
         // 播放受击音效 (根据最终伤害判定)
@@ -1495,7 +1678,7 @@ public class EldenRingMovement : MonoBehaviour
 
         if (anim != null)
         {
-            animHandler.anim.SetTrigger(animHandler.hitTrigger);
+            anim.SetTrigger("Hit");
         }
         
         StopCoroutine(nameof(ResetHit));
@@ -1536,7 +1719,7 @@ public class EldenRingMovement : MonoBehaviour
 
         if (anim != null)
         {
-            animHandler.anim.SetTrigger(animHandler.blockHitTrigger);
+            anim.SetTrigger("BlockHit");
             anim.SetBool("IsBlocking", false);
         }
         StopCoroutine(nameof(ResetHit));
@@ -1601,14 +1784,22 @@ public class EldenRingMovement : MonoBehaviour
         currentState = ActionState.IdleMove;
  
         locomotion.ResetSpeed();
+        comboPending = false;
+        lightComboPending = false;
         targetLeftHandIKWeight = 1f;
 
         locomotion.ResetSpeed();
 
         if (anim != null)
         {
-            animHandler.ResetAllTriggers();
-            
+            anim.ResetTrigger("Attack");
+            anim.ResetTrigger("LightAttack");
+            anim.ResetTrigger("Combo");
+            anim.ResetTrigger("LightCombo");
+            anim.ResetTrigger("Cast");
+            anim.ResetTrigger("Dodge");
+            anim.ResetTrigger("Hit");
+            anim.ResetTrigger("BlockHit");
             if (attackLayerIndex >= 0) anim.SetLayerWeight(attackLayerIndex, 0f);
             anim.Play("Locomotion", 0, 0f);
             anim.SetFloat("Speed", 0f);
@@ -1695,6 +1886,8 @@ public class EldenRingMovement : MonoBehaviour
         currentState = ActionState.IdleMove;
   
         locomotion.ResetSpeed();   
+        comboPending = false;
+        lightComboPending = false;
         targetLeftHandIKWeight = 1f; // 兜底：挨打/攻击结束/复活时，强制恢复双手握持
         
         locomotion.ResetSpeed();
@@ -1702,7 +1895,14 @@ public class EldenRingMovement : MonoBehaviour
         if (anim != null)
         {
             // 手动清除所有手残多按的触发器缓存
-            animHandler.ResetAllTriggers();
+            anim.ResetTrigger("Attack");
+            anim.ResetTrigger("LightAttack");
+            anim.ResetTrigger("Combo");
+            anim.ResetTrigger("LightCombo");
+            anim.ResetTrigger("Cast");
+            anim.ResetTrigger("Dodge");
+            anim.ResetTrigger("Hit");
+            anim.ResetTrigger("BlockHit");
 
             // 强制把攻击层权重压回 0，彻底解开上半身动画锁死（解决平移滑步问题）
             if (attackLayerIndex >= 0) anim.SetLayerWeight(attackLayerIndex, 0f);
@@ -1804,8 +2004,8 @@ public class EldenRingMovement : MonoBehaviour
         
         if (anim != null)
         {
-            animHandler.anim.ResetTrigger(animHandler.hitTrigger);
-            animHandler.anim.ResetTrigger(animHandler.blockHitTrigger);
+            anim.ResetTrigger("Hit");
+            anim.ResetTrigger("BlockHit");
         }
 
         // 4. 重置待机计时器
@@ -1821,7 +2021,8 @@ public class EldenRingMovement : MonoBehaviour
         currentState = ActionState.IdleMove;
         if (anim != null)
         {
-            animHandler.ResetAllTriggers();
+            anim.ResetTrigger("Hit");
+            anim.ResetTrigger("BlockHit");
         }
         // 受击结束后，如果格挡键还按着，重新进入格挡状态
         if (isBlocking)
@@ -1853,7 +2054,9 @@ public class EldenRingMovement : MonoBehaviour
         // 重置玩家状态
         nextAttackIsCrit = false;
         nextHeavyAttackIsFourth = false;
-
+        comboPending = false;
+        lightComboPending = false;
+    
         currentHealth = maxHealth;
         currentStamina = maxStamina;
  
@@ -1878,7 +2081,14 @@ public class EldenRingMovement : MonoBehaviour
         if (anim != null)
         {
             // 清理触发器防幽灵动画
-            animHandler.ResetAllTriggers();
+            anim.ResetTrigger("Attack");
+            anim.ResetTrigger("LightAttack");
+            anim.ResetTrigger("Combo");
+            anim.ResetTrigger("LightCombo");
+            anim.ResetTrigger("Cast");
+            anim.ResetTrigger("Dodge");
+            anim.ResetTrigger("Hit");
+            anim.ResetTrigger("BlockHit");
             
             // 强行压制攻击层
             if (attackLayerIndex >= 0) anim.SetLayerWeight(attackLayerIndex, 0f);
@@ -2029,7 +2239,7 @@ public class EldenRingMovement : MonoBehaviour
         // 播放死亡动画（需要在 Animator 中添加 Death 状态和 Trigger 参数 "Die"）
         if (anim != null)
         {
-            animHandler.anim.SetTrigger(animHandler.dieTrigger);
+            anim.SetTrigger("Die");
         }
     
         // 禁用角色控制器，防止移动

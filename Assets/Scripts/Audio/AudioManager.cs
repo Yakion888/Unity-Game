@@ -40,8 +40,8 @@ public class AudioManager : MonoBehaviour
         exploreSource.volume = maxBGMVolume;
         combatSource.volume = 0f;
 
+        //// 游戏启动时，只播放探索音乐
         if (!exploreSource.isPlaying) exploreSource.Play();
-        if (!combatSource.isPlaying) combatSource.Play();
     }
 
     public void SetCombatState(bool inCombat, bool forceRestart = false)
@@ -69,6 +69,13 @@ public class AudioManager : MonoBehaviour
     private IEnumerator CrossfadeBGM(AudioSource fadeOutSource, AudioSource fadeInSource)
     {
         float timer = 0f;
+
+        // 【核心修改 1】：如果要切入的歌被暂停了，让它接着播放
+        if (!fadeInSource.isPlaying) 
+        {
+            fadeInSource.Play();
+        }
+
         float startFadeOutVol = fadeOutSource.volume;
         float startFadeInVol = fadeInSource.volume;
 
@@ -83,8 +90,11 @@ public class AudioManager : MonoBehaviour
             yield return null;
         }
 
-        // 强行对齐最终音量
         fadeOutSource.volume = 0f;
         fadeInSource.volume = maxBGMVolume;
+        
+        // 【核心修改 2】：把音量降到 0 的那首歌彻底【暂停】！
+        // 这样不仅节省了 CPU 性能，下次切回来时它就会从当前进度继续播放！
+        fadeOutSource.Pause(); 
     }
 }

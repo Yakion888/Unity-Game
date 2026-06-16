@@ -13,7 +13,9 @@ MonoBehaviour:
   m_Name: "\u96F7\u9706\u4E07\u94A7"
   m_EditorClassIdentifier: Assembly-CSharp::WeaponDataSO
   weaponName: "\u96F7\u9706\u4E07\u94A7"
+  weaponBaseAttack: 40
   weaponModelPrefab: {fileID: 1891836510213813330, guid: c0f598478050d994699ee2d64804f920, type: 3}
+  exclusiveSkill: 2
   heavyAttackDamage: 0f00000014000000140000002300000032000000
   heavyAttackKnockback:
   - 5
@@ -22,11 +24,11 @@ MonoBehaviour:
   - 8
   - 10
   heavyAttackStaminaCost:
-  - 10
-  - 12
-  - 14
-  - 16
-  - 18
+  - 0
+  - 0
+  - 0
+  - 0
+  - 0
   heavyAttackRage: 10
   heavyAttackEffects:
   - {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}

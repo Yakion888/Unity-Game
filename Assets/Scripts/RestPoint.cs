@@ -15,7 +15,6 @@ public class RestPoint : MonoBehaviour
     public GameObject parentToShow;   // 需要显示的父对象
 
     private static GameObject currentTravelPanel = null;
-    private static bool isTravelPanelOpen = false;
 
     [Header("自定义复活坐标点(可选)")]
     public Transform specificSpawnPoint; 
