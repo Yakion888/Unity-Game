@@ -1973,8 +1973,26 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: afa7f556e888e7946bc4a78cda1dc2e7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AudioManager
-  exploreBGM: {fileID: 0}
-  combatBGM: {fileID: 0}
+  exploreBgmRef:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  combatBgmRef:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  mainMenuBgmRef:
+    m_AssetGUID: 1274d10032c3a634281256ab71f80b98
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  exploreSource: {fileID: 0}
+  combatSource: {fileID: 0}
   maxBGMVolume: 0.5
   crossfadeDuration: 2
 --- !u!114 &1122760964

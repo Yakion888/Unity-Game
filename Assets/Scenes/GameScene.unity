@@ -15558,6 +15558,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: afa7f556e888e7946bc4a78cda1dc2e7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AudioManager
+  exploreBgmRef:
+    m_AssetGUID: ca4e26629c93d6c4db5b14f124088736
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  combatBgmRef:
+    m_AssetGUID: 8bfbc498a84afd146a04a07ac22a035c
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  mainMenuBgmRef:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
   exploreSource: {fileID: 1223892416}
   combatSource: {fileID: 1972726437}
   maxBGMVolume: 0.31
