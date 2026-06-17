@@ -2,7 +2,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using System.Collections;
-using TMPro; 
+using System.IO;
+using TMPro;
 
 public class MainMenuController : MonoBehaviour
 {
@@ -34,7 +35,7 @@ public class MainMenuController : MonoBehaviour
             fadeScreen.raycastTarget = false; 
         }
 
-        bool hasSave = PlayerPrefs.GetInt("HasSavedGame", 0) == 1;
+        bool hasSave = File.Exists(Application.persistentDataPath + "/savegame.json");
         btnContinue.interactable = hasSave;
         
         if (!hasSave && txtContinue != null) 
@@ -57,8 +58,9 @@ public class MainMenuController : MonoBehaviour
     {
         if (isTransitioning) return;
         
-        PlayerPrefs.DeleteAll();
-        PlayerPrefs.Save();
+        string savePath = Application.persistentDataPath + "/savegame.json";
+        if (File.Exists(savePath))
+            File.Delete(savePath);
         
         StartCoroutine(TransitionToScene(true));
     }

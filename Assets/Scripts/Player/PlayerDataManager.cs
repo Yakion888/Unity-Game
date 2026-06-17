@@ -1,4 +1,6 @@
 using UnityEngine;
+using System.IO;
+using System.Collections.Generic;
 
 // 全局唯一的玩家数据中心（单例模式）
 public class PlayerDataManager : MonoBehaviour
@@ -6,40 +8,52 @@ public class PlayerDataManager : MonoBehaviour
     public static PlayerDataManager Instance;
 
     [Header("RPG 属性系统")]
-    public int currentLevel = 1;         
-    public int currentXP = 0;            
-    public int statPoints = 0;           
-    public int currentGold = 0;          
+    public int currentLevel = 1;
+    public int currentXP = 0;
+    public int statPoints = 0;
+    public int currentGold = 0;
 
     [Header("=== 武器强化系统 ===")]
-    public string weaponName = "狼的末路";   
-    public int weaponLevel = 0;             
-    public int maxWeaponLevel = 25;         
-    public float weaponBaseAttack = 40f;    
-    public float upgradeAttackBonus = 8f;   
+    public string weaponName = "狼的末路";
+    public int weaponLevel = 0;
+    public int maxWeaponLevel = 25;
+    public float weaponBaseAttack = 40f;
+    public float upgradeAttackBonus = 8f;
 
     [Header("基础加点属性")]
-    public int statVigor = 10;       // 生命力（影响最大生命值）    
-    public int statEndurance = 10;   // 持久力（影响最大耐力）    
-    public int statStrength = 10;    // 力量（增加物理攻击力）    
-    public int statResistance = 10;  // 坚韧度（增加物理防御力）    
-    public int statSpirit = 10;      // 精神力（提高怒气获取效率） 
+    public int statVigor = 10;       // 生命力（影响最大生命值）
+    public int statEndurance = 10;   // 持久力（影响最大耐力）
+    public int statStrength = 10;    // 力量（增加物理攻击力）
+    public int statResistance = 10;  // 坚韧度（增加物理防御力）
+    public int statSpirit = 10;      // 精神力（提高怒气获取效率）
 
     [Header("面板衍生属性 (自动计算)")]
-    public float maxHealth;              
-    public float maxStamina;             
-    public float attackPowerBonus;       
-    public float defensePower;           
-    public float rageGainMultiplier;     
+    public float maxHealth;
+    public float maxStamina;
+    public float attackPowerBonus;
+    public float defensePower;
+    public float rageGainMultiplier;
 
     [Header("存档与复活系统")]
-    public Vector3 respawnPosition;      
+    public Vector3 respawnPosition;
     public Quaternion respawnRotation;
+
+    private static string SavePath => Application.persistentDataPath + "/savegame.json";
 
     private void Awake()
     {
-        // 【架构修复】：防自杀单例模式
         Instance = this;
+    }
+
+    public static bool SaveFileExists()
+    {
+        return File.Exists(SavePath);
+    }
+
+    public static void DeleteSaveFile()
+    {
+        if (File.Exists(SavePath))
+            File.Delete(SavePath);
     }
 
     // ==========================================
@@ -65,69 +79,69 @@ public class PlayerDataManager : MonoBehaviour
     }
 
     // ==========================================
-    // 硬盘读写系统 (彻底独立)
+    // 硬盘读写系统 (JSON 文件存档)
     // ==========================================
     public void SaveGame(Vector3 currentRespawnPos, Quaternion currentRespawnRot)
     {
         respawnPosition = currentRespawnPos;
         respawnRotation = currentRespawnRot;
 
-        PlayerPrefs.SetInt("HasSavedGame", 1);
-        PlayerPrefs.SetFloat("PlayerPosX", respawnPosition.x);
-        PlayerPrefs.SetFloat("PlayerPosY", respawnPosition.y);
-        PlayerPrefs.SetFloat("PlayerPosZ", respawnPosition.z);
-        PlayerPrefs.SetFloat("PlayerRotY", respawnRotation.eulerAngles.y);
+        SaveData data = new SaveData();
+        data.currentLevel = currentLevel;
+        data.currentXP = currentXP;
+        data.statPoints = statPoints;
+        data.currentGold = currentGold;
+        data.weaponName = weaponName;
+        data.weaponLevel = weaponLevel;
+        data.statVigor = statVigor;
+        data.statEndurance = statEndurance;
+        data.statStrength = statStrength;
+        data.statResistance = statResistance;
+        data.statSpirit = statSpirit;
+        data.respawnPosX = respawnPosition.x;
+        data.respawnPosY = respawnPosition.y;
+        data.respawnPosZ = respawnPosition.z;
+        data.respawnRotY = respawnRotation.eulerAngles.y;
 
-        PlayerPrefs.SetInt("PlayerLevel", currentLevel);
-        PlayerPrefs.SetInt("PlayerXP", currentXP);
-        PlayerPrefs.SetInt("PlayerGold", currentGold);
-        PlayerPrefs.SetInt("Vigor", statVigor);
-        PlayerPrefs.SetInt("Endurance", statEndurance);
-        PlayerPrefs.SetInt("Strength", statStrength);
-        PlayerPrefs.SetInt("Resistance", statResistance);
-        PlayerPrefs.SetInt("Spirit", statSpirit);
-        PlayerPrefs.SetInt("WeaponLevel", weaponLevel); 
-
-        // 存储休息点进度
-        string activePoints = "";
+        data.activeRestPointNames = new List<string>();
         foreach (var rp in RestPoint.allActiveRestPoints)
         {
             if (rp != null)
-            {
-                if (!string.IsNullOrEmpty(activePoints)) activePoints += ",";
-                activePoints += rp.restPointName;
-            }
+                data.activeRestPointNames.Add(rp.restPointName);
         }
-        PlayerPrefs.SetString("ActiveRestPoints", activePoints);
-        PlayerPrefs.Save();
+
+        string json = JsonUtility.ToJson(data, true);
+        File.WriteAllText(SavePath, json);
+        Debug.Log($"存档已保存至: {SavePath}");
     }
 
     public void LoadGame(EldenRingMovement player)
     {
-        if (PlayerPrefs.GetInt("HasSavedGame", 0) == 1)
+        if (File.Exists(SavePath))
         {
-            float x = PlayerPrefs.GetFloat("PlayerPosX");
-            float y = PlayerPrefs.GetFloat("PlayerPosY");
-            float z = PlayerPrefs.GetFloat("PlayerPosZ");
-            float rotY = PlayerPrefs.GetFloat("PlayerRotY");
+            string json = File.ReadAllText(SavePath);
+            SaveData data = JsonUtility.FromJson<SaveData>(json);
 
-            currentLevel = PlayerPrefs.GetInt("PlayerLevel", 1);
-            currentXP = PlayerPrefs.GetInt("PlayerXP", 0);
-            currentGold = PlayerPrefs.GetInt("PlayerGold", 0);
-            statVigor = PlayerPrefs.GetInt("Vigor", 10);
-            statEndurance = PlayerPrefs.GetInt("Endurance", 10);
-            statStrength = PlayerPrefs.GetInt("Strength", 10);
-            statResistance = PlayerPrefs.GetInt("Resistance", 10);
-            statSpirit = PlayerPrefs.GetInt("Spirit", 10);
-            weaponLevel = PlayerPrefs.GetInt("WeaponLevel", 0);
+            currentLevel = data.currentLevel;
+            currentXP = data.currentXP;
+            statPoints = data.statPoints;
+            currentGold = data.currentGold;
+            weaponName = data.weaponName;
+            weaponLevel = data.weaponLevel;
+            statVigor = data.statVigor;
+            statEndurance = data.statEndurance;
+            statStrength = data.statStrength;
+            statResistance = data.statResistance;
+            statSpirit = data.statSpirit;
+
+            respawnPosition = new Vector3(data.respawnPosX, data.respawnPosY, data.respawnPosZ);
+            respawnRotation = Quaternion.Euler(0, data.respawnRotY, 0);
 
             // 恢复已激活的休息点
-            string savedActivePoints = PlayerPrefs.GetString("ActiveRestPoints", "");
-            if (!string.IsNullOrEmpty(savedActivePoints))
+            if (data.activeRestPointNames != null && data.activeRestPointNames.Count > 0)
             {
-                string[] names = savedActivePoints.Split(',');
                 RestPoint[] allRestPoints = FindObjectsOfType<RestPoint>(true);
-                foreach (string name in names)
+                foreach (string name in data.activeRestPointNames)
                 {
                     foreach (var rp in allRestPoints)
                     {
@@ -139,9 +153,6 @@ public class PlayerDataManager : MonoBehaviour
                     }
                 }
             }
-
-            respawnPosition = new Vector3(x, y, z);
-            respawnRotation = Quaternion.Euler(0, rotY, 0);
 
             // 强行把玩家传送到最后一次存档的赐福点
             CharacterController cc = player.GetComponent<CharacterController>();
@@ -159,7 +170,6 @@ public class PlayerDataManager : MonoBehaviour
             respawnRotation = player.transform.rotation;
         }
 
-        // 不管有没有旧存档，启动时都重新计算一遍属性！
         RecalculateAttributes(player);
     }
 
@@ -236,4 +246,25 @@ public class PlayerDataManager : MonoBehaviour
         }
         return false;
     }
+}
+
+[System.Serializable]
+public class SaveData
+{
+    public int currentLevel = 1;
+    public int currentXP = 0;
+    public int statPoints = 0;
+    public int currentGold = 0;
+    public string weaponName = "狼的末路";
+    public int weaponLevel = 0;
+    public int statVigor = 10;
+    public int statEndurance = 10;
+    public int statStrength = 10;
+    public int statResistance = 10;
+    public int statSpirit = 10;
+    public float respawnPosX;
+    public float respawnPosY;
+    public float respawnPosZ;
+    public float respawnRotY;
+    public List<string> activeRestPointNames;
 }

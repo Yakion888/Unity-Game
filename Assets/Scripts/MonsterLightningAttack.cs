@@ -1,11 +1,12 @@
 using UnityEngine;
 using System.Collections;
 
-// 彻底剥夺它的 Update 权利，变成听主脚本指挥的纯战技组件！
+// 重构：全池化、状态机协同的怪物追踪法术组件
 public class MonsterLightningAttack : MonoBehaviour
 {
-    [Header("闪电特效")]
-    public GameObject lightningPrefab;       
+    [Header("闪电特效与音效")]
+    public GameObject lightningPrefab;       // 落地闪电特效
+    public AudioClip lightningStrikeSFX;     // 👈 【新增】：雷击爆发音效
 
     [Header("伤害配置")]
     public float lightningDamage = 35f;
@@ -27,7 +28,7 @@ public class MonsterLightningAttack : MonoBehaviour
         playerTransform = GameObject.FindWithTag("Player")?.transform;
 
         GameObject circleObj = new GameObject("WarningCircle");
-        circleObj.transform.SetParent(null); // 不要作为子物体，防止随怪物移动
+        circleObj.transform.SetParent(null); 
         warningCircle = circleObj.AddComponent<LineRenderer>();
         
         warningCircle.material = new Material(Shader.Find("Sprites/Default"));
@@ -40,7 +41,6 @@ public class MonsterLightningAttack : MonoBehaviour
         warningCircle.positionCount = circleSegment + 1;
     }
 
-    // 由怪物主脚本调用！
     public void ExecuteLightningStrike()
     {
         StartCoroutine(LightningRoutine());
@@ -54,11 +54,9 @@ public class MonsterLightningAttack : MonoBehaviour
         Vector3 targetPos = playerTransform.position;
 
         // 【节奏一：死亡追踪期 - 1秒】
-        // 圈圈死死跟着玩家，给玩家极大的压迫感！
         float trackTimer = 0f;
         while (trackTimer < 1.0f)
         {
-            // 如果怪物在这个期间被打断/死了，直接取消施法！
             if (enemyMaster.currentState == BasicEnemyTest.EnemyState.Hit || enemyMaster.isDead)
             {
                 warningCircle.enabled = false;
@@ -67,7 +65,6 @@ public class MonsterLightningAttack : MonoBehaviour
 
             trackTimer += Time.deltaTime;
             
-            // 射线贴地
             if (Physics.Raycast(playerTransform.position + Vector3.up, Vector3.down, out RaycastHit hit, 40f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
             {
                 targetPos = hit.point;
@@ -77,14 +74,12 @@ public class MonsterLightningAttack : MonoBehaviour
         }
 
         // 【节奏二：死锁爆破期 - 0.5秒】
-        // 圈圈不再移动，颜色变亮闪烁，告诉玩家：立刻翻滚！
         warningCircle.startColor = Color.yellow;
         warningCircle.endColor = Color.yellow;
         
         float lockTimer = 0f;
         while (lockTimer < 0.5f)
         {
-            // 同样，如果怪物被打断，法术取消
             if (enemyMaster.currentState == BasicEnemyTest.EnemyState.Hit || enemyMaster.isDead)
             {
                 warningCircle.enabled = false;
@@ -97,15 +92,27 @@ public class MonsterLightningAttack : MonoBehaviour
 
         // 【节奏三：天罚降临】
         warningCircle.enabled = false;
-        warningCircle.startColor = circleColor; warningCircle.endColor = circleColor; // 恢复颜色
+        warningCircle.startColor = circleColor; warningCircle.endColor = circleColor; 
 
-        if (lightningPrefab != null)
+        // ==============================================================
+        // 核心升级：特效与音效全面接入全局对象池！0 GC
+        // ==============================================================
+        
+        // 1. 播放 3D 爆炸音效（注意不加 true 参数，利用引擎天然的距离衰减）
+        if (lightningStrikeSFX != null && AudioPoolManager.Instance != null)
         {
-            GameObject lightning = Instantiate(lightningPrefab, targetPos, Quaternion.identity);
-            Destroy(lightning, 3f);
+            // 音量可微调（这里写1.0f），位置传入 targetPos 保证声源在雷击处！
+            AudioPoolManager.Instance.PlaySound(lightningStrikeSFX, targetPos, 1.0f, null, true);
         }
 
-        // 伤害判定
+        // 2. 从特效池拿取闪电特效，3秒后自动回收
+        if (lightningPrefab != null && VFXPoolManager.Instance != null)
+        {
+            GameObject lightning = VFXPoolManager.Instance.SpawnFromPool(lightningPrefab, targetPos, Quaternion.identity);
+            VFXPoolManager.Instance.ReturnToPool(lightning, 3f);
+        }
+
+        // 3. 伤害判定
         Collider[] hitColliders = Physics.OverlapSphere(targetPos, lightningRadius);
         foreach (var col in hitColliders)
         {
@@ -118,8 +125,7 @@ public class MonsterLightningAttack : MonoBehaviour
             }
         }
 
-        // 【核心修复】：闪电劈完后，如果怪物还在施法状态，强行把他一脚踹回追逐状态
-        // 彻底抛弃不可靠的动画事件！
+        // 技能放完后，强行一脚把怪物踹回追逐状态
         if (enemyMaster != null && enemyMaster.currentState == BasicEnemyTest.EnemyState.MagicCast)
         {
             enemyMaster.currentState = BasicEnemyTest.EnemyState.Chase;

@@ -349,13 +349,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   lightningPrefab: {fileID: 5627696518775099638, guid: 6e19186c425546840baabfaf7ea829f8, type: 3}
+  lightningStrikeSFX: {fileID: 8300000, guid: 90abaf8acd017834ab2ef305d35d845e, type: 3}
   lightningDamage: 35
-  isBlockinglightningDamage: 0
   lightningRadius: 2.5
   lightningPushForce: 15
-  attackTriggerDistance: 16
-  warningTime: 2
-  attackCooldown: 8
   circleColor: {r: 1, g: 0.15566039, b: 0.15566039, a: 1}
   circleLineWidth: 0.15
   circleSegment: 36
@@ -3491,7 +3488,7 @@ Transform:
   m_GameObject: {fileID: 145138277}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 27.55, y: 0, z: 108.14}
+  m_LocalPosition: {x: 27.55, y: 0, z: 98.85}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4594,7 +4591,7 @@ Transform:
   m_GameObject: {fileID: 333674171}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 27.04407, y: -0.00003, z: 98.38}
+  m_LocalPosition: {x: 27.04407, y: -0.00003, z: 109.58}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -19269,7 +19266,7 @@ Transform:
   m_GameObject: {fileID: 1522698134}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 21.66, y: 0, z: 104.26}
+  m_LocalPosition: {x: 22.68, y: 0, z: 104.26}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
