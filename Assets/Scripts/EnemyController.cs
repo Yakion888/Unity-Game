@@ -147,13 +147,18 @@ public class BasicEnemyTest : MonoBehaviour
 
     void Update()
     {
-        if (isDead) return;
+        // 尸体仍需走物理（滑行），但不能走 AI 逻辑
+        if (isDead)
+        {
+            HandleHitPhysics();
+            return;
+        }
 
         // 处理硬直物理（击退/击飞时，关闭导航网格，使用原生物理）
         if (isHitStunned || currentState == EnemyState.Hit)
         {
             HandleHitPhysics();
-            return; 
+            return;
         }
 
         if (lightningCooldownTimer > 0) lightningCooldownTimer -= Time.deltaTime;
@@ -407,9 +412,9 @@ public class BasicEnemyTest : MonoBehaviour
         if (impact.magnitude > 0.1f)
         {
             velocity += impact;
-            // 【Bug 修复】统一使用 8f 衰减系数，不再区分死活/力度。
-            // 旧逻辑 (impact>10f→3f) 导致终结斩击（force≈22.5）只滑很短距离。
-            float decay = 8f;
+            // decay 控制摩擦力：值越小滑行越远。
+            // 8f → 5f：半衰期从 0.09s 延长到 0.14s，滑行距离提升约 60%
+            float decay = 5f;
             impact = Vector3.Lerp(impact, Vector3.zero, Time.deltaTime * decay);
         }
 
@@ -517,12 +522,13 @@ public class BasicEnemyTest : MonoBehaviour
         knockbackDirection = direction;
         knockbackDirection.y = 0;
 
-        if (stunTime > 1.0f || isDead || upForce < 0) 
+        if (stunTime > 1.0f || isDead || upForce < 0)
         {
-            if (controller != null) 
-            { 
-                controller.enabled = false; 
-                controller.height = 0.2f; controller.radius = 0.01f; controller.center = new Vector3(0, 0.1f, 0); controller.stepOffset = 0f; 
+            // 向上击飞才缩小碰撞体（防止飞行中剐蹭），砸地（upForce<0）保持原尺寸以正常滑行
+            if (upForce >= 0 && controller != null)
+            {
+                controller.enabled = false;
+                controller.height = 0.2f; controller.radius = 0.01f; controller.center = new Vector3(0, 0.1f, 0); controller.stepOffset = 0f;
             }
             Collider col = GetComponent<Collider>(); if (col != null) col.enabled = false;
         }
@@ -534,11 +540,17 @@ public class BasicEnemyTest : MonoBehaviour
                 transform.position = groundHit.point;
             }
             impact = knockbackDirection * force;
-            verticalVelocity = 0f; // 【Bug 修复】不再用 -10f 把敌人往地下推 → 改用 controller.isGrounded 自然贴地
+            verticalVelocity = 0f;
 
-            // 【Bug 修复】砸地后立刻重开 controller（虽然缩成胶囊但够做地面碰撞），
-            // 让 HandleHitPhysics 的 controller.isGrounded 正确返回 true → verticalVelocity 归零 → 不会沉地
-            if (controller != null) controller.enabled = true;
+            // 恢复 Collider 全尺寸 → 贴地滑行摩擦力与存活状态完全一致
+            if (controller != null)
+            {
+                controller.height = originalHeight;
+                controller.radius = originalRadius;
+                controller.center = originalCenter;
+                controller.stepOffset = originalStepOffset;
+                controller.enabled = true;
+            }
         }
         else impact = knockbackDirection * force + Vector3.up * upForce;
 
