@@ -455,7 +455,7 @@ public class AudioManager : MonoBehaviour
         }
 
         // ---- 开始异步加载 ----
-        //Debug.Log($"[AudioManager] 开始异步加载 {debugName} …");
+        Debug.Log($"[AudioManager] 开始异步加载 {debugName} …");
         AsyncOperationHandle<AudioClip> op = reference.LoadAssetAsync();
 
         try

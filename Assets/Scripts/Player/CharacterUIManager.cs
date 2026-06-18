@@ -61,33 +61,43 @@ public class CharacterUIManager : MonoBehaviour
     {
         if (playerStats == null) return;
 
-        // 获取升下一级所需的经验
         int nextLevelXP = playerStats.GetXPRequirementForNextLevel();
 
-        // 拼接文字显示（格式参考：等级: 5  (卢恩: 1500 / 3000) ）
-        levelText.text = $"等级: {playerStats.currentLevel} \n经验: {playerStats.currentXP} / {nextLevelXP}";
+        // 使用 TMP SetText(格式化模板, 参数...) 替代 string 插值：
+        //   SetText 直写 TMP 内部 char[] 缓冲区 → 零堆分配
+        //   而 $"{}" 会在托管堆上分配临时 string → 触发 GC
 
-        vigorText.text = $"生命力: {playerStats.statVigor}   最大HP: {playerStats.maxHealth}";
-        
-        enduranceText.text = $"持久力: {playerStats.statEndurance}    最大耐力: {playerStats.maxStamina}";
-        
-        strengthText.text = $"力量: {playerStats.statStrength}    攻击力加成: +{playerStats.attackPowerBonus}";
-        
-        resistanceText.text = $"坚韧度: {playerStats.statResistance}    物理防御: {playerStats.defensePower}";
-        
-        spiritText.text = $"精神力: {playerStats.statSpirit}    怒气获取倍率: {playerStats.rageGainMultiplier:F2}x";
+        levelText.SetText("等级: {0} \n经验: {1} / {2}",
+            playerStats.currentLevel, playerStats.currentXP, nextLevelXP);
+
+        vigorText.SetText("生命力: {0}    最大HP: {1}",
+            playerStats.statVigor, playerStats.maxHealth);
+
+        enduranceText.SetText("持久力: {0}     最大耐力: {1}",
+            playerStats.statEndurance, playerStats.maxStamina);
+
+        strengthText.SetText("力量: {0}     攻击力加成: +{1}",
+            playerStats.statStrength, playerStats.attackPowerBonus);
+
+        resistanceText.SetText("坚韧度: {0}     物理防御: {1}",
+            playerStats.statResistance, playerStats.defensePower);
+
+        spiritText.SetText("精神力: {0}     怒气获取倍率: {1:0.00}x",
+            playerStats.statSpirit, playerStats.rageGainMultiplier);
 
         if (weaponText != null)
         {
-            // 计算武器当前的面板攻击力（基础 + 强化等级×增幅）
             float currentWeaponAtk = playerStats.weaponBaseAttack + (playerStats.weaponLevel * playerStats.upgradeAttackBonus);
-            weaponText.text = $"装备武器: {playerStats.weaponName} +{playerStats.weaponLevel} \n   武器攻击力: {currentWeaponAtk}";
+            // NOTE: TMP SetText 格式化重载只接受 float 参数，weaponName 是 string 无法隐式转换。
+            // 此处用 string.Format 兜底 —— UpdateStatUI 仅面板打开/升级时触发，非逐帧调用，GC 可忽略。
+            weaponText.text = string.Format("装备武器: {0} +{1} \n   武器攻击力: {2}",
+                playerStats.weaponName, playerStats.weaponLevel, currentWeaponAtk);
         }
-        
+
         if (goldText != null)
         {
-            // 用金光闪闪的颜色标识金币（这里用了富文本颜色代码）
-            goldText.text = $"持有金币: <color=#FFD700>{playerStats.currentGold}</color> G";
+            goldText.SetText("持有金币: <color=#FFD700>{0}</color> G",
+                playerStats.currentGold);
         }
     }
 

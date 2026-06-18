@@ -261,7 +261,7 @@ public class AudioManager : MonoBehaviour
             targetInVol: maxBGMVolume,
             duration: crossfadeDuration);
 
-        //Debug.Log($"[AudioManager] 探索 BGM 已开始播放，音量 = {maxBGMVolume}");
+        Debug.Log($"[AudioManager] 探索 BGM 已开始播放，音量 = {maxBGMVolume}");
     }
 
     /// <summary>
@@ -323,7 +323,7 @@ public class AudioManager : MonoBehaviour
         // ---------- 第四步：释放探索 BGM 的内存 ----------
         // 此时探索音源已静音 + 暂停，可以安全释放其 AudioClip
         ReleaseHandle(ref _exploreHandle);
-        //Debug.Log("[AudioManager] ✅ 已切换到战斗 BGM，探索 BGM 内存已释放");
+        Debug.Log("[AudioManager] ✅ 已切换到战斗 BGM，探索 BGM 内存已释放");
     }
 
     /// <summary>
@@ -365,7 +365,7 @@ public class AudioManager : MonoBehaviour
 
         // ---------- 第四步：释放战斗 BGM 的内存 ----------
         ReleaseHandle(ref _combatHandle);
-        //Debug.Log("[AudioManager] ✅ 已切换到探索 BGM，战斗 BGM 内存已释放");
+        Debug.Log("[AudioManager] ✅ 已切换到探索 BGM，战斗 BGM 内存已释放");
     }
 
     /// <summary>
@@ -410,7 +410,7 @@ public class AudioManager : MonoBehaviour
         // 释放所有非主菜单句柄
         ReleaseHandle(ref _exploreHandle);
         ReleaseHandle(ref _combatHandle);
-        //Debug.Log("[AudioManager] ✅ 已切换到主菜单 BGM，其他 BGM 内存已释放");
+        Debug.Log("[AudioManager] ✅ 已切换到主菜单 BGM，其他 BGM 内存已释放");
     }
 
     // ============================================================
@@ -455,7 +455,7 @@ public class AudioManager : MonoBehaviour
         }
 
         // ---- 开始异步加载 ----
-        //Debug.Log($"[AudioManager] 开始异步加载 {debugName} …");
+        Debug.Log($"[AudioManager] 开始异步加载 {debugName} …");
         AsyncOperationHandle<AudioClip> op = reference.LoadAssetAsync();
 
         try
@@ -466,7 +466,7 @@ public class AudioManager : MonoBehaviour
 
             if (op.Status == AsyncOperationStatus.Succeeded)
             {
-                //Debug.Log($"[AudioManager] ✅ {debugName} 加载完成");
+                Debug.Log($"[AudioManager] ✅ {debugName} 加载完成");
                 return (op.Result, op);
             }
             else
@@ -521,7 +521,7 @@ public class AudioManager : MonoBehaviour
     {
         if (serial != _transitionSerial)
         {
-            //Debug.Log($"[AudioManager] 切换请求 #{serial} 已过期（当前序列号 = {_transitionSerial}），丢弃");
+            Debug.Log($"[AudioManager] 切换请求 #{serial} 已过期（当前序列号 = {_transitionSerial}），丢弃");
             return false;
         }
         return true;

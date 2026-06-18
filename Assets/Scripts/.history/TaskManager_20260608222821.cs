@@ -60,7 +60,7 @@ public class TaskManager : MonoBehaviour
             taskCompleted = true;
             taskText.color = Color.green;   // 完成后变绿
             // 可选：完成任务后的其他逻辑（例如播放特效、奖励）
-            //Debug.Log("任务完成！");
+            Debug.Log("任务完成！");
         }
     }
 

@@ -87,19 +87,22 @@ public class PlayerStatsManager : MonoBehaviour
         int maxS = Mathf.CeilToInt(maxStamina);
         int maxR = Mathf.CeilToInt(maxRage);
 
+        // 使用 TMP SetText("{0} / {1}", ...) 替代 string 插值：
+        //   $"{}" 会在托管堆分配中间字符串 → GC.Alloc 峰值
+        //   SetText 直写 TMP 内部 char[] 缓冲区 → 零堆分配
         if (healthText != null && currentH != lastHealth)
         {
-            healthText.text = $"{currentH} / {maxH}";
+            healthText.SetText("{0} / {1}", currentH, maxH);
             lastHealth = currentH;
         }
         if (staminaText != null && currentS != lastStamina)
         {
-            staminaText.text = $"{currentS} / {maxS}";
+            staminaText.SetText("{0} / {1}", currentS, maxS);
             lastStamina = currentS;
         }
         if (rageText != null && currentR != lastRage)
         {
-            rageText.text = $"{currentR} / {maxR}";
+            rageText.SetText("{0} / {1}", currentR, maxR);
             lastRage = currentR;
         }
     }
