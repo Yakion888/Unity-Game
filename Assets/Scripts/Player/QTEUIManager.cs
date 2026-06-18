@@ -21,6 +21,7 @@ public class QTEUIManager : MonoBehaviour
     public float maxScale = 1.3f;        // 最大缩放
 
     private Coroutine heartbeatCoroutine;
+    private Coroutine _hideCoroutine; // 【Bug 修复】追踪 HideRoutine，防止与 ShowQTE 竞态
 
     private void Awake()
     {
@@ -30,7 +31,7 @@ public class QTEUIManager : MonoBehaviour
             qteCanvasGroup.alpha = 0f;
             qteCanvasGroup.gameObject.SetActive(false);
         }
-        
+
         // 斩击初始隐藏
         if (slashEffectObj != null) slashEffectObj.SetActive(false);
     }
@@ -39,12 +40,20 @@ public class QTEUIManager : MonoBehaviour
     public void ShowQTE()
     {
         if (qteCanvasGroup == null) return;
-        
+
+        // 【Bug 修复】如果 HideRoutine 还在播退出动画，立刻掐掉
+        // 否则退出动画的最后一帧会把 SetActive(false) 执行在刚刚 Show 出来的 UI 上
+        if (_hideCoroutine != null)
+        {
+            StopCoroutine(_hideCoroutine);
+            _hideCoroutine = null;
+        }
+
         qteCanvasGroup.gameObject.SetActive(true);
         qteCanvasGroup.alpha = 1f;
-        
+
         // 恢复初始红色，并隐藏斩击特效
-        if (zhanText != null) zhanText.color = new Color(0.8f, 0f, 0f, 1f); 
+        if (zhanText != null) zhanText.color = new Color(0.8f, 0f, 0f, 1f);
         if (slashEffectObj != null) slashEffectObj.SetActive(false);
 
         // 停止之前的协程，开启新的心跳
@@ -59,7 +68,26 @@ public class QTEUIManager : MonoBehaviour
 
         if (heartbeatCoroutine != null) StopCoroutine(heartbeatCoroutine);
 
-        StartCoroutine(HideRoutine(success));
+        // 【Bug 修复】如果上次 HideRoutine 还在跑，先停掉
+        if (_hideCoroutine != null)
+        {
+            StopCoroutine(_hideCoroutine);
+            _hideCoroutine = null;
+        }
+
+        _hideCoroutine = StartCoroutine(HideRoutine(success));
+    }
+
+    /// <summary>
+    /// 【Bug 修复】强制关闭 QTE —— 无动画，直接 SetActive(false)。
+    /// 供大招结束时的安全网使用。
+    /// </summary>
+    public void ForceHide()
+    {
+        if (heartbeatCoroutine != null) { StopCoroutine(heartbeatCoroutine); heartbeatCoroutine = null; }
+        if (_hideCoroutine != null) { StopCoroutine(_hideCoroutine); _hideCoroutine = null; }
+        if (qteCanvasGroup != null) qteCanvasGroup.gameObject.SetActive(false);
+        if (slashEffectObj != null) slashEffectObj.SetActive(false);
     }
 
     // 心跳协程
@@ -126,5 +154,6 @@ public class QTEUIManager : MonoBehaviour
         // 清理现场
         qteCanvasGroup.gameObject.SetActive(false);
         if (slashEffectObj != null) slashEffectObj.SetActive(false);
+        _hideCoroutine = null; // 【Bug 修复】标记 HideRoutine 已完成
     }
 }

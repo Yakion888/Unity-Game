@@ -374,10 +374,31 @@ public class BasicEnemyTest : MonoBehaviour
         // 硬直和击飞期间，强行关掉导航，交给 CharacterController 处理物理击退！
         if (agent.enabled) agent.enabled = false;
 
-        if (isSuspended) verticalVelocity = 0f;
+        if (isSuspended)
+        {
+            verticalVelocity = 0f;
+        }
         else
         {
-            if (controller.isGrounded && verticalVelocity < 0) verticalVelocity = 0;
+            // ── 主路径：controller 启用 → 用原生 isGrounded 判断落地 ──
+            if (controller.enabled)
+            {
+                if (controller.isGrounded && verticalVelocity < 0)
+                    verticalVelocity = 0;
+            }
+            // ── 【Bug 修复】安全路径：controller 被关闭时（如 TakeKnockbackWithUp 的缩胶囊阶段），
+            //     手动射线检测地面，防止 verticalVelocity 无限累积导致敌人沉入地底 ──
+            else
+            {
+                float checkDist = 0.3f;
+                if (Physics.Raycast(transform.position + Vector3.up * 0.1f, Vector3.down, checkDist,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                {
+                    if (verticalVelocity < 0)
+                        verticalVelocity = 0;
+                }
+            }
+
             verticalVelocity += gravity * Time.deltaTime;
         }
 
@@ -386,12 +407,16 @@ public class BasicEnemyTest : MonoBehaviour
         if (impact.magnitude > 0.1f)
         {
             velocity += impact;
-            float decay = (isDead || impact.magnitude > 10f) ? 3f : 10f;
+            // 【Bug 修复】统一使用 8f 衰减系数，不再区分死活/力度。
+            // 旧逻辑 (impact>10f→3f) 导致终结斩击（force≈22.5）只滑很短距离。
+            float decay = 8f;
             impact = Vector3.Lerp(impact, Vector3.zero, Time.deltaTime * decay);
         }
 
-        if (controller.enabled) controller.Move(velocity * Time.deltaTime);
-        else transform.position += velocity * Time.deltaTime;
+        if (controller.enabled)
+            controller.Move(velocity * Time.deltaTime);
+        else
+            transform.position += velocity * Time.deltaTime;
     }
 
     private void SetVisible(bool visible)
@@ -506,17 +531,21 @@ public class BasicEnemyTest : MonoBehaviour
         {
            if (Physics.Raycast(transform.position + Vector3.up, Vector3.down, out RaycastHit groundHit, 20f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
             {
-                if (controller != null) controller.enabled = false;
-                transform.position = groundHit.point; 
+                transform.position = groundHit.point;
             }
             impact = knockbackDirection * force;
-            verticalVelocity = -10f; 
+            verticalVelocity = 0f; // 【Bug 修复】不再用 -10f 把敌人往地下推 → 改用 controller.isGrounded 自然贴地
+
+            // 【Bug 修复】砸地后立刻重开 controller（虽然缩成胶囊但够做地面碰撞），
+            // 让 HandleHitPhysics 的 controller.isGrounded 正确返回 true → verticalVelocity 归零 → 不会沉地
+            if (controller != null) controller.enabled = true;
         }
         else impact = knockbackDirection * force + Vector3.up * upForce;
 
         if (currentHealth <= 0)
         {
-            if (isDead && anim != null && upForce < 0) anim.SetTrigger("DieBySkill"); 
+            if (isDead && anim != null && upForce < 0)
+                anim.SetTrigger("DieBySkill"); // 鞭尸：砸地时重播死亡动画反应
             Die(true); return;
         }
 
@@ -526,7 +555,8 @@ public class BasicEnemyTest : MonoBehaviour
             anim.ResetTrigger("Attack"); 
         }
 
-        if (stunTime > 1.0f) anim.SetTrigger("DieBySkill"); else anim.SetTrigger("Hit");
+        // 活着的敌人用 KnockDown（有出口过渡可恢复），死者用 DieBySkill（无出口过渡永久倒地）
+        if (stunTime > 1.0f) anim.SetTrigger("KnockDown"); else anim.SetTrigger("Hit");
         currentState = EnemyState.Hit;
         isHitStunned = true;
         currentStunDuration = stunTime;
@@ -565,6 +595,9 @@ public class BasicEnemyTest : MonoBehaviour
         StopCoroutine(nameof(EndHitStun)); StartCoroutine(nameof(EndHitStun));
     }
 
+    /// <summary>死亡后延迟清理尸体的协程引用，供外部重置计时</summary>
+    private Coroutine _deathCleanupCoroutine;
+
     void Die(bool isSkillDeath = false)
     {
         if (isDead) return;
@@ -574,23 +607,48 @@ public class BasicEnemyTest : MonoBehaviour
         if (tm != null) tm.ReportEnemyKilled();
 
         EldenRingMovement playerMovement = player.GetComponent<EldenRingMovement>();
-        if (playerMovement != null) { playerMovement.AddXP(xpReward); playerMovement.AddGold(goldReward); } 
+        if (playerMovement != null) { playerMovement.AddXP(xpReward); playerMovement.AddGold(goldReward); }
 
-        if (anim != null) { if(isSkillDeath) anim.SetTrigger("DieBySkill"); else anim.SetTrigger("Die"); }
+        // 触发死亡动画，让敌人在消失前完整播放倒地动画
+        if (anim != null) { if (isSkillDeath) anim.SetTrigger("DieBySkill"); else anim.SetTrigger("Die"); }
 
-        currentState = EnemyState.Hit; 
+        currentState = EnemyState.Hit;
         isHitStunned = true;
         if (uiCanvas != null) uiCanvas.gameObject.SetActive(false);
 
-        TogglePhysics(false);
-        StartCoroutine(DisableAfterDeath());
+        // 【Bug 修复 / 鞭尸支持】技能击杀（如大招上挑/斩击）时保留物理组件，
+        // 让尸体可以在后续终结斩击中正常被砸地、贴地滑行。
+        // 普通死亡照旧关闭物理以节省性能。
+        if (!isSkillDeath)
+        {
+            TogglePhysics(false);
+        }
+
+        _deathCleanupCoroutine = StartCoroutine(DisableAfterDeath(2.5f));
     }
 
-    private IEnumerator DisableAfterDeath()
+    /// <summary>
+    /// 【鞭尸支持】重置尸体清理倒计时。
+    /// 外部（如 Skill_QTEUltimate）在终结斩击命中 / 砸地后调用，
+    /// 确保尸体在滑行期间不会提前消失。
+    /// </summary>
+    public void ResetDeathCleanupTimer(float delay)
     {
-        yield return new WaitForSeconds(2.5f); 
+        if (!isDead) return;
+        if (_deathCleanupCoroutine != null)
+        {
+            StopCoroutine(_deathCleanupCoroutine);
+            _deathCleanupCoroutine = null;
+        }
+        _deathCleanupCoroutine = StartCoroutine(DisableAfterDeath(delay));
+    }
+
+    private IEnumerator DisableAfterDeath(float delay = 2.5f)
+    {
+        yield return new WaitForSeconds(delay);
         TogglePhysics(false);
-        gameObject.SetActive(false); 
+        gameObject.SetActive(false);
+        _deathCleanupCoroutine = null;
     }
 
     System.Collections.IEnumerator EndHitStun()
@@ -605,7 +663,7 @@ public class BasicEnemyTest : MonoBehaviour
             if (anim != null)
             {
                 AnimatorStateInfo state = anim.GetCurrentAnimatorStateInfo(0);
-                isPlayingHitAnim = state.IsName("Hit") || state.IsName("DieBySkill") || state.IsName("KnockUp");
+                isPlayingHitAnim = state.IsName("Hit") || state.IsName("DieBySkill") || state.IsName("KnockUp") || state.IsName("KnockDown");
             }
 
             if (elapsed >= currentStunDuration && !isPlayingHitAnim) break;
@@ -613,8 +671,8 @@ public class BasicEnemyTest : MonoBehaviour
             yield return null;
         }
 
-        isHitStunned = false; 
-        if (currentHealth > 0) 
+        isHitStunned = false;
+        if (currentHealth > 0)
         {
             // 恢复物理和导航
             TogglePhysics(true);
@@ -622,12 +680,20 @@ public class BasicEnemyTest : MonoBehaviour
             {
                 controller.enabled = false;
                 controller.height = originalHeight; controller.radius = originalRadius; controller.center = originalCenter; controller.stepOffset = originalStepOffset;
-                transform.position += new Vector3(0, 0.05f, 0); 
-                controller.enabled = true; 
+                transform.position += new Vector3(0, 0.05f, 0);
+                controller.enabled = true;
             }
-            
+
+            // 【Bug 修复】NavMeshAgent 在 HandleHitPhysics 中被禁用（agent.enabled = false）。
+            // 重新启用后其内部位置可能仍残留击飞前的高空坐标，导致代理把敌人"拉回"半空。
+            // Warp 强制将代理采样到当前 transform.position 的 NavMesh 表面上。
+            if (agent != null && agent.enabled && NavMesh.SamplePosition(transform.position, out NavMeshHit navHit, 5f, NavMesh.AllAreas))
+            {
+                agent.Warp(navHit.position);
+            }
+
             // 硬直结束后，直接进入警戒追击状态！
-            currentState = EnemyState.Chase; 
+            currentState = EnemyState.Chase;
         }
     }
 

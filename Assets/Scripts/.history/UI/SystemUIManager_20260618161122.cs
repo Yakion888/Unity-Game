@@ -65,17 +65,10 @@ public class SystemUIManager : MonoBehaviour
     /// </summary>
     private QTEUIManager _cachedQTEPanel;
 
-    /// <summary>QTE 面板异步加载中标记（防抖）</summary>
-    private bool _isLoadingQTE;
-
     /// <summary>
-    /// HideQTE / ForceHideQTE 被调用时若面板还在异步加载，暂存意图，加载完立刻执行。
-    /// null = 无挂起请求；true = 成功动画；false = 失败/强制关闭。
+    /// 是否正在异步加载 QTE 面板。
     /// </summary>
-    private bool? _pendingHideSuccess;
-
-    /// <summary>ShowQTE 被调用后，加载完成时是否自动显示面板</summary>
-    private bool _shouldShowAfterLoad;
+    private bool _isLoadingQTE;
 
     // ============================================================
     // Unity 生命周期
@@ -188,7 +181,7 @@ public class SystemUIManager : MonoBehaviour
                 }
 
                 player.isUIOpen = true;
-                //Debug.Log("[SystemUIManager] ✅ 角色面板加载完成");
+                Debug.Log("[SystemUIManager] ✅ 角色面板加载完成");
             }
             else
             {
@@ -214,87 +207,90 @@ public class SystemUIManager : MonoBehaviour
     // ============================================================
 
     /// <summary>
-    /// 预加载 QTE 面板（不显示）。
-    /// 在 ExecuteSkill 中提前调用，利用大招前几段动画的时间异步加载，
-    /// 确保 Event_TriggerQTE 时面板已就绪，0 延迟弹出。
-    /// </summary>
-    public void PreloadQTEPanel()
-    {
-        if (_cachedQTEPanel != null || _isLoadingQTE) return;
-        _ = LoadQTEPanelAsync(); // fire-and-forget
-    }
-
-    /// <summary>
-    /// 显示 QTE 战斗面板（懒加载 + 永久缓存）。
+    /// 显示 QTE 战斗面板。
+    ///
+    /// 懒加载缓存模式：
+    ///   - 首次调用：异步实例化 → 缓存 QTEUIManager 组件引用 → 显示
+    ///   - 后续调用：直接 cachedQTEPanel.ShowQTE() → SetActive(true)，0 延迟
+    ///
+    /// 为什么不用"用完销毁"模式？
+    ///   QTE 面板在 Boss 战中可能频繁开关（每次大招都要用），
+    ///   反复 Load/Release 会导致：
+    ///     1. 每次都有异步延迟（玩家感到卡顿）
+    ///     2. 反复加载/卸载 AssetBundle（IO 压力 + 内存碎片）
+    ///   永久缓存用少量常驻内存换取战斗中的 0 延迟体验。
     /// </summary>
     public async void ShowQTE()
     {
+        // ── 缓存命中：直接唤醒，0 帧延迟 ──
         if (_cachedQTEPanel != null)
         {
             _cachedQTEPanel.ShowQTE();
             return;
         }
 
-        _shouldShowAfterLoad = true;
+        // ── 连点防抖：正在加载中 ──
+        if (_isLoadingQTE)
+        {
+            Debug.Log("[SystemUIManager] QTE 面板正在加载中，已忽略重复调用");
+            return;
+        }
 
-        if (!_isLoadingQTE)
-            await LoadQTEPanelAsync();
-        // 若已在加载中（由 PreloadQTEPanel 触发），LoadQTEPanelAsync 完成时会检查 _shouldShowAfterLoad
-    }
-
-    /// <summary>共享的 Addressables 异步加载逻辑</summary>
-    private async System.Threading.Tasks.Task LoadQTEPanelAsync()
-    {
+        // ── 首次加载 ──
         _isLoadingQTE = true;
 
         try
         {
             if (qtePanelRef == null || !qtePanelRef.RuntimeKeyIsValid())
             {
-                Debug.LogError("[SystemUIManager] qtePanelRef 未配置或无效！");
+                Debug.LogError(
+                    "[SystemUIManager] qtePanelRef 未配置或无效！\n" +
+                    "请在 Inspector 中将对应 Addressables 预制体拖入槽位。");
                 return;
             }
 
-            var handle = qtePanelRef.InstantiateAsync(mainCanvas);
+            Debug.Log("[SystemUIManager] 首次加载 QTE 面板（仅此一次）…");
+            AsyncOperationHandle<GameObject> handle =
+                qtePanelRef.InstantiateAsync(mainCanvas);
+
             await handle.Task;
 
-            if (handle.Status != AsyncOperationStatus.Succeeded)
+            if (handle.Status == AsyncOperationStatus.Succeeded)
             {
-                Debug.LogError($"[SystemUIManager] QTE 面板加载失败：{handle.Status}");
-                return;
+                GameObject obj = handle.Result;
+                _cachedQTEPanel = obj.GetComponent<QTEUIManager>();
+
+                if (_cachedQTEPanel != null)
+                {
+                    // 初始状态设为隐藏，等待 ShowQTE 时唤醒
+                    obj.SetActive(false);
+                    _cachedQTEPanel.ShowQTE(); // 本次直接显示
+                    Debug.Log("[SystemUIManager] ✅ QTE 面板已缓存，后续调用 0 延迟");
+                }
+                else
+                {
+                    Debug.LogError(
+                        "[SystemUIManager] QTE 预制体上未找到 QTEUIManager 组件！\n" +
+                        "加载的预制体已销毁。");
+                    Addressables.ReleaseInstance(obj);
+                }
             }
-
-            GameObject obj = handle.Result;
-            _cachedQTEPanel = obj.GetComponent<QTEUIManager>();
-
-            if (_cachedQTEPanel == null)
+            else
             {
-                Debug.LogError("[SystemUIManager] QTE 预制体上未找到 QTEUIManager 组件！");
-                Addressables.ReleaseInstance(obj);
-                return;
-            }
-
-            obj.SetActive(false);
-
-            // 加载完成 → 处理挂起请求（优先级：hide > show > 纯预加载不做任何事）
-            if (_pendingHideSuccess.HasValue)
-            {
-                _cachedQTEPanel.HideQTE(_pendingHideSuccess.Value);
-                _pendingHideSuccess = null;
-            }
-            else if (_shouldShowAfterLoad)
-            {
-                _cachedQTEPanel.ShowQTE();
+                Debug.LogError(
+                    $"[SystemUIManager] QTE 面板加载失败！状态：{handle.Status}\n" +
+                    $"异常：{handle.OperationException}");
             }
         }
         catch (System.Exception ex)
         {
-            Debug.LogError($"[SystemUIManager] QTE 面板加载异常：{ex.Message}");
+            Debug.LogError(
+                $"[SystemUIManager] QTE 面板加载异常！\n" +
+                $"类型：{ex.GetType().Name}\n信息：{ex.Message}");
         }
         finally
         {
             _isLoadingQTE = false;
-            _shouldShowAfterLoad = false;
         }
     }
 
@@ -308,26 +304,19 @@ public class SystemUIManager : MonoBehaviour
         if (_cachedQTEPanel != null)
         {
             _cachedQTEPanel.HideQTE(success);
-        }
-        else
-        {
-            // 面板还在异步加载 → 暂存意图，加载完立刻执行
-            _pendingHideSuccess = success;
+            // ↑ HideQTE 内部执行 SetActive(false)，GameObject 保留在场景中
         }
     }
 
     /// <summary>
-    /// 强制关闭 QTE 面板 —— 无动画，直接 SetActive(false)。
+    /// 【Bug 修复】强制关闭 QTE 面板 —— 无动画，直接 SetActive(false)。
+    /// 供大招结束（OnUltimateFinished）等极端情况使用，确保 UI 绝不残留。
     /// </summary>
     public void ForceHideQTE()
     {
         if (_cachedQTEPanel != null)
         {
             _cachedQTEPanel.ForceHide();
-        }
-        else
-        {
-            _pendingHideSuccess = false;
         }
     }
 }

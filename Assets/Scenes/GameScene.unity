@@ -15672,6 +15672,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SystemUIManager
   player: {fileID: 8800650058468447927}
   mainCanvas: {fileID: 7853347}
+  characterPanelRef:
+    m_AssetGUID: 3216627dde3d1ca49ae703081d0bd42a
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  qtePanelRef:
+    m_AssetGUID: b5b78f43d58d30341a65e338a3314144
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
 --- !u!1 &1277770407
 GameObject:
   m_ObjectHideFlags: 0
