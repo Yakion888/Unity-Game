@@ -9,6 +9,13 @@ using UnityEngine.AI; //引入导航网格库
 [RequireComponent(typeof(NavMeshAgent))] //强制要求挂载导航组件
 public class BasicEnemyTest : MonoBehaviour
 {
+    // ═══════════════════════════════════════════════════════════
+    // 【架构重构】事件驱动死亡广播
+    // 取代 Die() 中的 FindObjectOfType<TaskManager>() 和 GetComponent<Player>(),
+    // 让订阅者自行注册关注，彻底解耦怪物与任务/玩家系统。
+    // ═══════════════════════════════════════════════════════════
+    public static event System.Action<BasicEnemyTest> OnEnemyDied;
+
     public enum EnemyState { Hidden, Idle, Patrol, Chase, Attack, MagicCast, Hit, Dead }
     public EnemyState currentState = EnemyState.Hidden;
 
@@ -615,11 +622,12 @@ public class BasicEnemyTest : MonoBehaviour
         if (isDead) return;
         isDead = true;
 
-        TaskManager tm = FindObjectOfType<TaskManager>();
-        if (tm != null) tm.ReportEnemyKilled();
-
-        EldenRingMovement playerMovement = player.GetComponent<EldenRingMovement>();
-        if (playerMovement != null) { playerMovement.AddXP(xpReward); playerMovement.AddGold(goldReward); }
+        // ═══════════════════════════════════════════════════════
+        // 【事件驱动】广播死亡事件。
+        // 订阅者（TaskManager、玩家等）自行通过 OnEnemyDied += ... 注册，
+        // 怪物无需知道谁在监听，零耦合，零 FindObjectOfType。
+        // ═══════════════════════════════════════════════════════
+        OnEnemyDied?.Invoke(this);
 
         // 触发死亡动画，让敌人在消失前完整播放倒地动画
         if (anim != null) { if (isSkillDeath) anim.SetTrigger("DieBySkill"); else anim.SetTrigger("Die"); }

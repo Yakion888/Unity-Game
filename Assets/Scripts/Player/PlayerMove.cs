@@ -77,6 +77,28 @@ public class EldenRingMovement : MonoBehaviour
     public Vector3 respawnPosition => PlayerDataManager.Instance.respawnPosition;
     public Quaternion respawnRotation => PlayerDataManager.Instance.respawnRotation;
 
+    // ═══════════════════════════════════════════════════════
+    // 【架构重构】事件驱动：订阅怪物死亡事件，自动发放经验金币。
+    // 替代敌人 Die() 中 GetComponent<EldenRingMovement>() 的强耦合写法。
+    // ═══════════════════════════════════════════════════════
+    private void OnEnable()
+    {
+        BasicEnemyTest.OnEnemyDied += OnEnemyDied;
+    }
+
+    private void OnDisable()
+    {
+        BasicEnemyTest.OnEnemyDied -= OnEnemyDied;
+    }
+
+    /// <summary>收到怪物死亡事件 → 根据怪物配置自动发放经验与金币奖励</summary>
+    private void OnEnemyDied(BasicEnemyTest enemy)
+    {
+        if (enemy == null) return;
+        PlayerDataManager.Instance.AddXP(enemy.xpReward);
+        PlayerDataManager.Instance.AddGold(enemy.goldReward);
+    }
+
     // 留给外部 UI 或敌人调用的旧接口，直接转发给数据中心！
     public void AddXP(int amount) => PlayerDataManager.Instance.AddXP(amount);
     public void AddGold(int amount) => PlayerDataManager.Instance.AddGold(amount);

@@ -16,6 +16,25 @@ public class TaskManager : MonoBehaviour
     private bool taskActive = false;            // 任务是否已激活（接受任务后）
     private bool taskCompleted = false;
 
+    // ═══════════════════════════════════════════════════════
+    // 【架构重构】通过事件订阅解耦，替代怪物 Die() 中的 FindObjectOfType
+    // ═══════════════════════════════════════════════════════
+    private void OnEnable()
+    {
+        BasicEnemyTest.OnEnemyDied += OnEnemyDied;
+    }
+
+    private void OnDisable()
+    {
+        BasicEnemyTest.OnEnemyDied -= OnEnemyDied;
+    }
+
+    /// <summary>收到怪物死亡事件时，计入击杀进度</summary>
+    private void OnEnemyDied(BasicEnemyTest enemy)
+    {
+        ReportEnemyKilled();
+    }
+
     void Start()
     {
         // 初始隐藏任务栏
