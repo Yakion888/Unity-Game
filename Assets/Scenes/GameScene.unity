@@ -3670,6 +3670,105 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c91521e4be5359241b27243bb7c10e5e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VFXPoolManager
+  preloadEntries:
+  - assetRef:
+      m_AssetGUID: 7ac879c2caac1ca41b6c438e77d8b25d
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 2
+  - assetRef:
+      m_AssetGUID: 50f1354827c77ef4b99c4dca0ee3411d
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 2
+  - assetRef:
+      m_AssetGUID: 057aa477789506a44bd206e9c5acad19
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 2
+  - assetRef:
+      m_AssetGUID: b8b81f35766ca884dbd7f017291a51bc
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 2
+  - assetRef:
+      m_AssetGUID: 3eb9a9285d5f5f9428602ee71e041e00
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 1
+  - assetRef:
+      m_AssetGUID: 852ef6640dca43f4ca3c52917fb2797f
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 3
+  - assetRef:
+      m_AssetGUID: 13cb2a2fe3b251f44a7b700cfd70b621
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 1
+  - assetRef:
+      m_AssetGUID: 5e50e7789d75fbd489a2605fa1aadac0
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 2
+  - assetRef:
+      m_AssetGUID: bdef2d118476fb1418e97552de259e43
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 1
+  - assetRef:
+      m_AssetGUID: 2160cc5d7b7168944a8370ab25965305
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 1
+  - assetRef:
+      m_AssetGUID: ec0fd209033e1054fb8a06b041d4e4d3
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 3
+  - assetRef:
+      m_AssetGUID: 90e71c2869fc5b84d9eeb73f9e3c9e53
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 1
+  - assetRef:
+      m_AssetGUID: f90fc7acf1ef2fa4c85896a9afc17028
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 2
+  - assetRef:
+      m_AssetGUID: a77a4875e2764fe4aaa382ef87ccf7ef
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    preloadCount: 2
 --- !u!4 &162589978
 Transform:
   m_ObjectHideFlags: 0
@@ -15640,7 +15739,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 39ef2aa93f51d4d47ad416e32201e783, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DamageTextPoolManager
-  damageTextPrefab: {fileID: 3039761369626700903, guid: ddb7ac238e9b1d545976c4d87e8e579f, type: 3}
+  damageTextPrefabRef:
+    m_AssetGUID: ddb7ac238e9b1d545976c4d87e8e579f
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
   canvasTransform: {fileID: 1324658997}
   initialPoolSize: 20
 --- !u!4 &1265976335
