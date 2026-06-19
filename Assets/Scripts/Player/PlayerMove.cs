@@ -338,7 +338,7 @@ public class EldenRingMovement : MonoBehaviour
         // ==========================================
         // 4. 数据中心接管与初始化
         // ==========================================
-        PlayerDataManager.Instance.LoadGame(this); 
+        PlayerDataManager.Instance.ApplySaveDataToScene(this);
 
         // 读完档算出真正的最大血量后，再把当前血量和耐力回满
         currentStamina = maxStamina;
@@ -398,7 +398,7 @@ public class EldenRingMovement : MonoBehaviour
     private void HandleSystemAndUIState()
     {
         // UI 鼠标状态
-        if (isUIOpen)
+        if (isUIOpen || SettingsMenu.IsOpen)
         {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
@@ -459,6 +459,9 @@ public class EldenRingMovement : MonoBehaviour
 
     private void HandleActionInputs()
     {
+        // 设置面板打开时屏蔽所有战斗输入，防止 UI 点击被缓存在游戏世界触发攻击
+        if (SettingsMenu.IsOpen) return;
+
         // 1. 武器切换 (按下 Tab 且处于绝对自由状态时)
         if (inputHandler.SwitchWeaponInput && currentState == ActionState.IdleMove)
         {

@@ -212,9 +212,9 @@ public class AudioManager : MonoBehaviour
         {
             await TransitionToMainMenuAsync(mySerial);
         }
-        catch (System.Exception ex)
+        catch (System.Exception)
         {
-            Debug.LogError($"[AudioManager] 播放主菜单 BGM 失败：{ex.Message}");
+            // 主菜单场景可能没有 AudioManager，静默处理
         }
     }
 
@@ -244,7 +244,7 @@ public class AudioManager : MonoBehaviour
 
         if (exploreClip == null)
         {
-            Debug.LogError("[AudioManager] 探索 BGM 加载失败 —— 游戏将无背景音乐！");
+            //Debug.LogError("[AudioManager] 探索 BGM 加载失败 —— 游戏将无背景音乐！");
             return;
         }
 

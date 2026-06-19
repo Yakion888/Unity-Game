@@ -140,7 +140,7 @@ public class BasicEnemyTest : MonoBehaviour
                 playerCamera = Camera.main;
 
             if (playerCamera == null)
-                Debug.LogError("找不到相机，血条无法面向相机！");
+                //Debug.LogError("找不到相机，血条无法面向相机！");
         }
 
         if (startHidden)
@@ -649,7 +649,7 @@ public class BasicEnemyTest : MonoBehaviour
             if (solidCollider != null) solidCollider.enabled = true; 
         }
         
-        Debug.Log($"敌人硬直彻底结束 (等待了 {waitTime:F2} 秒)，恢复战斗姿态");
+        //Debug.Log($"敌人硬直彻底结束 (等待了 {waitTime:F2} 秒)，恢复战斗姿态");
     }
 
     // 动画事件：造成伤害

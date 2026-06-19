@@ -3,24 +3,31 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using System.Collections;
 using System.IO;
+using System.Linq;
 using TMPro;
 
+/// <summary>
+/// 主菜单控制器 —— 多存档槽位版
+/// </summary>
 public class MainMenuController : MonoBehaviour
 {
     [Header("UI 引用")]
     public Button btnContinue;
     public Button btnNewGame;
+    public Button btnLoadGame;  
     public Button btnQuit;
     public Image fadeScreen;
-    public TextMeshProUGUI txtContinue; 
+    public TextMeshProUGUI txtContinue;
+
+    [Header("UI 面板引用")]
+    public SaveSlotPanel saveSlotPanel; //存档列表面板
 
     [Header("音效与过渡配置")]
-    public string gameSceneName = "Level_01"; 
+    public string gameSceneName = "Level_01";
     public float fadeDuration = 1.5f;
-    
-    // 👇【新增】：引用你的背景音乐播放器
+
     [Tooltip("拖入挂载了主菜单BGM的 AudioSource")]
-    public AudioSource bgmSource; 
+    public AudioSource bgmSource;
 
     private bool isTransitioning = false;
 
@@ -32,85 +39,114 @@ public class MainMenuController : MonoBehaviour
         if (fadeScreen != null)
         {
             fadeScreen.color = new Color(0, 0, 0, 0);
-            fadeScreen.raycastTarget = false; 
+            fadeScreen.raycastTarget = false;
         }
 
-        bool hasSave = File.Exists(Application.persistentDataPath + "/savegame.json");
+        // ── 扫描所有存档 ──
+        var allSaves = SaveSlotManager.GetAllSaves();
+        bool hasSave = allSaves.Count > 0;
+
+        // "继续游戏"按钮：有存档可点，无存档灰色
         btnContinue.interactable = hasSave;
-        
-        if (!hasSave && txtContinue != null) 
+        if (txtContinue != null)
         {
-            txtContinue.color = new Color(1, 1, 1, 0.3f);
+            txtContinue.text = "继续游戏";
+            // 有存档=亮色可点，无存档=灰色不可点
+            txtContinue.color = hasSave ? new Color(1f, 0.95f, 0.7f) : new Color(0.4f, 0.4f, 0.4f);
         }
 
         btnContinue.onClick.AddListener(OnContinueClick);
         btnNewGame.onClick.AddListener(OnNewGameClick);
+        if (btnLoadGame != null) btnLoadGame.onClick.AddListener(OnLoadGameClick);
         btnQuit.onClick.AddListener(OnQuitClick);
     }
 
-    private void OnContinueClick()
+    // ============================================================
+    // 公开入口：供 SaveSlotPanel 调用
+    // ============================================================
+
+    /// <summary>
+    /// 外部（SaveSlotPanel）设置好 PendingLoadSlotId 后调用此方法触发场景过渡。
+    /// </summary>
+    public void StartGameTransition()
     {
         if (isTransitioning) return;
-        StartCoroutine(TransitionToScene(false));
+        StartCoroutine(TransitionToScene());
+    }
+
+    // ============================================================
+    // 继续游戏 → 加载最新存档
+    // ============================================================
+    private void OnContinueClick()
+    {
+        int latestSlot = SaveSlotManager.FindLatestSlot();
+        if (latestSlot <= 0) return;
+
+        SaveSlotManager.PendingLoadSlotId = latestSlot;
+        SaveSlotManager.PendingIsNewGame = false;
+        StartGameTransition();
     }
 
     private void OnNewGameClick()
     {
-        if (isTransitioning) return;
-        
-        string savePath = Application.persistentDataPath + "/savegame.json";
-        if (File.Exists(savePath))
-            File.Delete(savePath);
-        
-        StartCoroutine(TransitionToScene(true));
+        SaveSlotManager.PendingLoadSlotId = SaveSlotManager.FindFirstFreeSlot();
+        SaveSlotManager.PendingIsNewGame = true;
+        StartGameTransition();
     }
 
+    private void OnLoadGameClick()
+    {
+        if (isTransitioning || saveSlotPanel == null) return;
+        
+        // 打开多存档列表面板
+        saveSlotPanel.ShowPanel();
+    }
+
+    // ============================================================
+    // 退出
+    // ============================================================
     private void OnQuitClick()
     {
         if (isTransitioning) return;
-        Debug.Log("游戏正在退出...");
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
         Application.Quit();
+#endif
     }
 
-    // 核心黑屏与音乐淡出过渡协程
-    private IEnumerator TransitionToScene(bool isNewGame)
+    // ============================================================
+    // 黑屏过渡
+    // ============================================================
+    private IEnumerator TransitionToScene()
     {
         isTransitioning = true;
 
-        // 记录渐变开始前，音乐的初始音量（比如是 0.6）
         float startVolume = bgmSource != null ? bgmSource.volume : 0f;
 
         if (fadeScreen != null)
         {
-            fadeScreen.raycastTarget = true; 
-            
+            fadeScreen.raycastTarget = true;
+
             float elapsed = 0f;
             while (elapsed < fadeDuration)
             {
                 elapsed += Time.deltaTime;
-                
-                // 1. 屏幕逐渐变黑
                 float alpha = Mathf.Clamp01(elapsed / fadeDuration);
                 fadeScreen.color = new Color(0, 0, 0, alpha);
-                
-                // 2. 👇【新增】：音乐音量逐渐变小到 0
+
                 if (bgmSource != null)
-                {
                     bgmSource.volume = Mathf.Lerp(startVolume, 0f, elapsed / fadeDuration);
-                }
 
                 yield return null;
             }
-            
-            // 确保最终状态
+
             fadeScreen.color = new Color(0, 0, 0, 1);
             if (bgmSource != null) bgmSource.volume = 0f;
         }
 
-        // 让黑夜稍微沉淀 0.5 秒，万籁俱寂，给玩家极强的心理压迫感
         yield return new WaitForSeconds(0.5f);
 
-        // 正式加载游戏场景
         SceneManager.LoadScene(gameSceneName);
     }
 }

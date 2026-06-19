@@ -62,7 +62,7 @@ public class RestPoint : MonoBehaviour
             isActive = true;
             if (!allActiveRestPoints.Contains(this))
                 allActiveRestPoints.Add(this);
-            Debug.Log($"休息点 {restPointName} 已激活");
+            //Debug.Log($"休息点 {restPointName} 已激活");
         }
     }
 
@@ -122,7 +122,7 @@ public class RestPoint : MonoBehaviour
         }
 
         // 检查是否需要让商人离开（仅当任务已完成且商人尚未消失时）
-        BussesMan merchant = FindObjectOfType<BussesMan>();
+        BussesMan merchant = FindFirstObjectByType<BussesMan>();
         if (merchant != null && merchant.taskManager != null && merchant.taskManager.IsTaskCompleted && merchant.gameObject.activeSelf)
         {
             merchant.MerchantLeave();
@@ -133,7 +133,7 @@ public class RestPoint : MonoBehaviour
             isActive = true;
             if (!allActiveRestPoints.Contains(this))
                 allActiveRestPoints.Add(this);
-            Debug.Log($"休息点 {restPointName} 已激活");
+            //Debug.Log($"休息点 {restPointName} 已激活");
         }
 
         // 调用全新的渐变转场休息流程，并把音效传进去
@@ -190,7 +190,7 @@ public class RestPoint : MonoBehaviour
         if (canvas == null)
         {
             canvas = panel.AddComponent<Canvas>();
-            Debug.Log("动态添加了 Canvas 组件");
+            //Debug.Log("动态添加了 Canvas 组件");
         }
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.overrideSorting = true;
@@ -228,7 +228,7 @@ public class RestPoint : MonoBehaviour
 
         // 确保面板激活
         panel.SetActive(true);
-        Debug.Log("新面板已实例化，名称: " + panel.name);
+        //Debug.Log("新面板已实例化，名称: " + panel.name);
     }
 
     public static void CloseTravelPanel()

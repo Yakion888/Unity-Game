@@ -80,6 +80,6 @@ public class CharacterPanelUI : MonoBehaviour
     // 【新增】关闭按钮功能（如果你面板上有一个 X 按钮，可以绑这个方法）
     public void OnClickClose()
     {
-        FindObjectOfType<SystemUIManager>().ToggleCharacterPanel();
+        FindFirstObjectByType<SystemUIManager>().ToggleCharacterPanel();
     }
 }

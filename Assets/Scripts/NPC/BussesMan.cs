@@ -57,7 +57,7 @@ public class BussesMan : MonoBehaviour
         if (hasTaskInProgress && taskManager != null && taskManager.IsTaskCompleted)
         {
             hasTaskInProgress = false;
-            Debug.Log("任务完成，商人可以再次发布任务");
+            //Debug.Log("任务完成，商人可以再次发布任务");
         }
 
         if (isPlayerInRange && !isDialogOpen && !hasTaskInProgress && canInteract && Input.GetKeyDown(interactKey))
@@ -159,7 +159,7 @@ public class BussesMan : MonoBehaviour
             {
                 playerMovement.RewardXP(xpReward);
                 playerMovement.RewardGold(goldReward);
-                Debug.Log($"发放奖励：经验 +{xpReward}，金币 +{goldReward}");
+                //Debug.Log($"发放奖励：经验 +{xpReward}，金币 +{goldReward}");
             }
             else
             {
@@ -207,7 +207,7 @@ public class BussesMan : MonoBehaviour
             hasTaskInProgress = true;
         }
 
-        Debug.Log("接受任务");
+        //Debug.Log("接受任务");
     }
 
     public void RefuseQuest()
@@ -216,7 +216,7 @@ public class BussesMan : MonoBehaviour
         CloseAllUI();
         talkPromptUI?.SetActive(false);
         isPlayerInRange = false;
-        Debug.Log("拒绝任务");
+        //Debug.Log("拒绝任务");
     }
 
     void CloseAllUI()
@@ -237,25 +237,32 @@ public class BussesMan : MonoBehaviour
         // 播报消息
         if (ActionLogManager.Instance != null)
             ActionLogManager.Instance.ShowMessage("商人已离开，并为你建设了一个临时休息处");
+
+        // 商人消失 → 先关任务区，再开休息点（避免休息点是任务区子物体时被连带关掉）
+        Transform parent = transform.parent;
+        if (parent != null && parent.name == "1stMission")
+        {
+            // 如果野外休息点在任务区下面，先提到根层级再关任务区
+            if (temporaryRestPoint != null && temporaryRestPoint.transform.IsChildOf(parent))
+                temporaryRestPoint.transform.SetParent(null);
+            parent.gameObject.SetActive(false);
+        }
         else
-            Debug.Log("商人已离开，并为你建设了一个临时休息处");
+        {
+            gameObject.SetActive(false);
+        }
 
         // 显示临时休息点
         if (temporaryRestPoint != null)
         {
-            var restPoint = temporaryRestPoint.GetComponent<RestPoint>();
-            if (restPoint != null) restPoint.isActive = false;
             temporaryRestPoint.SetActive(true);
+            var restPoint = temporaryRestPoint.GetComponent<RestPoint>();
+            // Activate() 会设置 isActive=true、加入 allActiveRestPoints、显示建筑，
+            // 确保玩家在此休息后存档能把"野外休息点"写入 JSON，下次读档正确复原
+            if (restPoint != null) restPoint.Activate();
         }
         else
             Debug.LogWarning("未指定临时休息点对象，无法显示");
-
-        // 商人消失
-        Transform parent = transform.parent;
-        if (parent != null && parent.name == "1stMission")
-            parent.gameObject.SetActive(false);
-        else
-            gameObject.SetActive(false); // 降级方案：只禁用自身
     }
 
     private void OnTriggerEnter(Collider other)
