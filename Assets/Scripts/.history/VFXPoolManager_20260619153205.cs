@@ -60,6 +60,9 @@ public class VFXPoolManager : MonoBehaviour
     private readonly List<AsyncOperationHandle<GameObject>> _handles =
         new List<AsyncOperationHandle<GameObject>>();
 
+    /// <summary>预热是否完成（完成前 SpawnFromPool 走旧逻辑即时实例化）</summary>
+    private bool _warmupComplete;
+
     private const int DefaultQueueCapacity = 30;
 
     // ============================================================
@@ -103,9 +106,12 @@ public class VFXPoolManager : MonoBehaviour
     private async System.Threading.Tasks.Task WarmupAsync()
     {
         if (preloadEntries == null || preloadEntries.Length == 0)
+        {
+            _warmupComplete = true;
             return;
+        }
 
-        //Debug.Log($"[VFXPoolManager] 开始预热加载 {preloadEntries.Length} 种特效…");
+        Debug.Log($"[VFXPoolManager] 开始预热加载 {preloadEntries.Length} 种特效…");
 
         foreach (var entry in preloadEntries)
         {
@@ -144,7 +150,8 @@ public class VFXPoolManager : MonoBehaviour
             await System.Threading.Tasks.Task.Delay(1);
         }
 
-        //Debug.Log($"[VFXPoolManager] 预热完成，共加载 {_loadedPrefabs.Count} 种特效");
+        _warmupComplete = true;
+        Debug.Log($"[VFXPoolManager] 预热完成，共加载 {_loadedPrefabs.Count} 种特效");
     }
 
     // ============================================================

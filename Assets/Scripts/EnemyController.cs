@@ -82,7 +82,9 @@ public class BasicEnemyTest : MonoBehaviour
 
     private int currentHealth;
     private float currentSpeed = 0f;
-    private float currentDirection = 0f;
+#pragma warning disable CS0414
+    private float currentDirection = 0f; // 预留：未来方向动画混合用
+#pragma warning restore CS0414
 
     private Vector3 initialPosition;     
     private Quaternion initialRotation;  

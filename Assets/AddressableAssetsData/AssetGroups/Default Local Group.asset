@@ -20,6 +20,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0f7b89077593a1e4c9b31fb23c305a03
+    m_Address: Audio/Light attack sounds
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1274d10032c3a634281256ab71f80b98
     m_Address: Audio/Winterfell
     m_ReadOnly: 0
@@ -50,6 +55,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 543a3c16e65cabb4499d93185f1ac58c
+    m_Address: Audio/player hit
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5e50e7789d75fbd489a2605fa1aadac0
     m_Address: Free Slash VFX/Prefabs/QTESlash_Wrapper
     m_ReadOnly: 0
@@ -57,6 +67,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 657eb54947066234da10c23ac60f7d22
     m_Address: Audio/bgm
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6b6f46eeb9c0efe4eab880774bf2f923
+    m_Address: "Assets/Characters/\u72FC\u5973\u4E13\u6B66.prefab"
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -80,6 +95,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9128d8427a5339a47ae3b8fbb1f771e1
+    m_Address: Audio/Attack swing sounds
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a77a4875e2764fe4aaa382ef87ccf7ef
     m_Address: Free Slash VFX/Prefabs/Impact_Electric
     m_ReadOnly: 0
@@ -100,6 +120,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c0f598478050d994699ee2d64804f920
+    m_Address: "Assets/Characters/\u65E5\u5973\u4E13\u6B66.prefab"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ddb7ac238e9b1d545976c4d87e8e579f
     m_Address: UI/DamageText_Prefab
     m_ReadOnly: 0
@@ -107,6 +132,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ec0fd209033e1054fb8a06b041d4e4d3
     m_Address: Free Slash VFX/Prefabs/Impact_qte
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f6a78be7f0d149047af93e9679751fe7
+    m_Address: Audio/slide attack sounds
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

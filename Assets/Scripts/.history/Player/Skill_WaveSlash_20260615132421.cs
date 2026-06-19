@@ -28,7 +28,7 @@ public class Skill_WaveSlash : MonoBehaviour
 
     public void ExecuteSkill()
     {
-        //Debug.Log("裂地剑气 施法开始");
+        Debug.Log("裂地剑气 施法开始");
         player.currentState = EldenRingMovement.ActionState.SkillCast;
         
         animHandler.anim.SetFloat("Speed", 0f);
