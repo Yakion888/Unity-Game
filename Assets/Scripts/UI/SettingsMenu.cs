@@ -148,7 +148,8 @@ public class SettingsMenu : MonoBehaviour
 
     private void GoToMainMenu()
     {
-        Time.timeScale = 1f; // 恢复时间，否则主菜单也暂停
+        IsOpen = false;       // 防止游戏场景加载后 HandleSystemAndUIState 看到残留的 IsOpen=true
+        Time.timeScale = 1f;  // 恢复时间，否则主菜单也暂停
         UnityEngine.SceneManagement.SceneManager.LoadScene(mainMenuSceneName);
     }
 

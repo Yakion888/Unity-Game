@@ -360,7 +360,7 @@ public class EldenRingMovement : MonoBehaviour
         audioSource.volume = 1f;
         audioSource.dopplerLevel = 0f;
 
-        _ = EquipWeaponAsync(0); // 游戏开始时异步装备第一把武器
+        _ = EquipWeaponAsync(PlayerDataManager.Instance.equippedWeaponIndex); // 读档时装备存档中记录的武器
 
         // 7. 瞬间重置相机到背后
         GetComponent<PlayerCameraController>().ResetCameraBehindPlayer();
@@ -1011,6 +1011,7 @@ public class EldenRingMovement : MonoBehaviour
             PlayerDataManager.Instance.RecalculateAttributes(this);
         }
 
+        PlayerDataManager.Instance.equippedWeaponIndex = currentWeaponIndex;
         //Debug.Log($"[EquipWeapon] 已装备：{currentWeapon.weaponName}");
     }
 

@@ -17,6 +17,7 @@ public class PlayerDataManager : MonoBehaviour
     [Header("=== 武器强化系统 ===")]
     public string weaponName = "狼的末路";
     public int weaponLevel = 0;
+    public int equippedWeaponIndex = 0;    // 存档用：当前装备第几把武器
     public int maxWeaponLevel = 25;
     public float weaponBaseAttack = 40f;
     public float upgradeAttackBonus = 8f;
@@ -230,6 +231,7 @@ public class PlayerDataManager : MonoBehaviour
         data.currentGold = currentGold;
         data.weaponName = weaponName;
         data.weaponLevel = weaponLevel;
+        data.equippedWeaponIndex = equippedWeaponIndex;
         data.statVigor = statVigor;
         data.statEndurance = statEndurance;
         data.statStrength = statStrength;
@@ -260,6 +262,7 @@ public class PlayerDataManager : MonoBehaviour
         currentGold = data.currentGold;
         weaponName = data.weaponName;
         weaponLevel = data.weaponLevel;
+        equippedWeaponIndex = data.equippedWeaponIndex;
         statVigor = data.statVigor;
         statEndurance = data.statEndurance;
         statStrength = data.statStrength;

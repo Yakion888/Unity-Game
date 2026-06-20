@@ -23,6 +23,7 @@ public class SaveData
     public int currentGold = 0;
     public string weaponName = "狼的末路";
     public int weaponLevel = 0;
+    public int equippedWeaponIndex = 0;
     public int statVigor = 10;
     public int statEndurance = 10;
     public int statStrength = 10;
