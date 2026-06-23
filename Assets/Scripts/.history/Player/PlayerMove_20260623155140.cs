@@ -208,12 +208,12 @@ public class EldenRingMovement : MonoBehaviour
       
     [Header("音效设置")]
     public AudioSource audioSource;
-    public AudioClip[] playerHitSounds;        // 受击音效（PlayerHealth 兜底读取）
-    public AudioClip perfectDodgeStartSFX;     // 启动音效（一播放）
-
+    public AudioClip perfectDodgeStartSFX;   // 启动音效（一播放）
+    
 
     [Header("角色语音")]
     public AudioClip[] skillVoices;         // 技能语音数组（可选）
+    public AudioClip deathSFX;              // 死亡语音
 
 
     [Header("战斗音乐冷却")]
@@ -318,20 +318,15 @@ public class EldenRingMovement : MonoBehaviour
             _health.healthSlider      = healthSlider;
             _health.staminaSlider     = staminaSlider;
             _health.rageSlider        = rageSlider;
-            _health.audioSource       = audioSource != null ? audioSource : GetComponent<AudioSource>();
-            if (_health.playerHitSounds == null || _health.playerHitSounds.Length == 0)
-                _health.playerHitSounds = playerHitSounds;   // 兜底：从主脚本旧字段复制
+            _health.audioSource       = audioSource;
             _health.anim              = anim;
             _health.controller        = controller;
             _health.locomotion        = locomotion;
-            _health.stats             = stats;
-            _health.getMaxHealth      = () => maxHealth;
-            _health.getMaxStamina     = () => maxStamina;
-            _health.hitTriggerHash    = animHandler.hitTrigger;
-            _health.dieTriggerHash    = animHandler.dieTrigger;
             _health.defensePower      = defensePower;
-            _health.getRespawnPosition = () => respawnPosition;
-            _health.getRespawnRotation = () => respawnRotation;
+            _health.maxHealth         = maxHealth;
+            _health.maxStamina        = maxStamina;
+            _health.respawnPosition   = respawnPosition;
+            _health.respawnRotation   = respawnRotation;
             _health.isInvincibleCheck = () => isInvincible;
             _health.isBlockingCheck   = () => isBlocking;
             _health.isCastingOrUltimate = () => currentState == ActionState.SkillCast || currentState == ActionState.Ultimate;
@@ -348,7 +343,7 @@ public class EldenRingMovement : MonoBehaviour
                     targetLeftHandIKWeight = 1f;
                     animHandler.ResetAllTriggers();
                     if (attackLayerIndex >= 0) anim.SetLayerWeight(attackLayerIndex, 0f);
-                    if (anim != null && _health != null) anim.SetTrigger(_health.hitTriggerHash);
+                    if (anim != null) animHandler.anim.SetTrigger(animHandler.hitTrigger);
                     StartCoroutine(nameof(ResetHit));
                 }
             };
@@ -357,8 +352,7 @@ public class EldenRingMovement : MonoBehaviour
             {
                 currentState = ActionState.Dead;
                 locomotion.ResetSpeed();
-                if (anim != null) anim.SetTrigger(animHandler.dieTrigger);
-                if (controller != null) controller.enabled = false;
+                if (anim != null) animHandler.anim.SetTrigger(animHandler.dieTrigger);
             };
 
             _health.OnRespawned += () =>
@@ -368,13 +362,6 @@ public class EldenRingMovement : MonoBehaviour
                 targetLeftHandIKWeight = 1f;
                 if (anim != null)
                 {
-                    anim.Play("Locomotion", 0, 0f);
-                    anim.SetBool("IsMoving", false);
-                    anim.SetBool("IsRunning", false);
-                    anim.SetBool("IsGrounded", true);
-                    anim.SetBool("IsStopping", false);
-                    anim.SetFloat("Speed", 0f);
-                    anim.SetFloat("Direction", 0f);
                     animHandler.ResetAllTriggers();
                     if (attackLayerIndex >= 0) anim.SetLayerWeight(attackLayerIndex, 0f);
                 }
@@ -692,6 +679,19 @@ public class EldenRingMovement : MonoBehaviour
         }
 
         stats.UpdateUIBarTexts(maxHealth, maxStamina);
+
+        // ── 同步血量/耐力/怒气到 PlayerHealth（受击/死亡判定需要实时值）──
+        if (_health != null)
+        {
+            _health.currentHealth = stats.currentHealth;
+            _health.currentStamina = stats.currentStamina;
+            _health.currentRage    = stats.currentRage;
+            _health.defensePower   = defensePower;
+            _health.maxHealth      = maxHealth;
+            _health.maxStamina     = maxStamina;
+            _health.respawnPosition = respawnPosition;
+            _health.respawnRotation = respawnRotation;
+        }
     }
 
     private void HandleAudioAndIK()
