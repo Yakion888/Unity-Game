@@ -58,6 +58,7 @@ public class PlayerLocomotionManager : MonoBehaviour
     private PlayerAnimatorHandler animHandler;
     private PlayerStatsManager stats;
     private CharacterController controller;
+    private PlayerTargeting _targeting;
 
     public void Initialize(EldenRingMovement p, PlayerInputHandler i, PlayerAnimatorHandler a, PlayerStatsManager s, CharacterController c)
     {
@@ -66,6 +67,7 @@ public class PlayerLocomotionManager : MonoBehaviour
         animHandler = a;
         stats = s;
         controller = c;
+        _targeting = p.GetComponent<PlayerTargeting>();
 
         // 初始化独立的脚步声音源
         footstepSource = gameObject.AddComponent<AudioSource>();
@@ -108,9 +110,9 @@ public class PlayerLocomotionManager : MonoBehaviour
         if (isUltimateCasting || isCasting) currentSpeed = 0f;
 
         // 处理旋转
-        if (player.isLockedOn && player.lockedTarget != null)
+        if (_targeting.IsLockedOn && _targeting.CurrentTarget != null)
         {
-            Vector3 dirToTarget = player.lockedTarget.position - transform.position;
+            Vector3 dirToTarget = _targeting.CurrentTarget.position - transform.position;
             dirToTarget.y = 0;
             if (dirToTarget != Vector3.zero)
             {

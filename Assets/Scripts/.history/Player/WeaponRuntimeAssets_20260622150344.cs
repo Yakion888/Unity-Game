@@ -5,20 +5,19 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 
 /// <summary>
-/// 武器运行时资产容器 —— 异步加载 + 统一释放 + Ticket 版本戳防竞态
+/// 武器运行时资产容器 —— 异步加载 + 统一释放
 ///
 /// ═══════════════════════════════════════════════════════════
-/// 【Ticket 机制】
-///   每次调用 LoadAsync 时，全局 _globalTicket 自增，本实例持有
-///   _myTicket = 当前全局值。每个异步加载完成后，比对 _myTicket 与
-///   _globalTicket：不匹配说明外部已发起新一轮 LoadAsync（切武器），
-///   本实例的加载结果已过时 → 立即释放句柄、跳过回调，防止：
-///     - 回调乱序：旧武器的特效覆盖到新武器的代理属性上
-///     - 内存泄漏：过时加载的句柄未释放
+/// 【职责】
+///   1. 接收 WeaponDataSO（仅含 AssetReference 地址），异步加载全部资源
+///   2. 持有所有 AsyncOperationHandle，供释放时统一 Addressables.Release
+///   3. 暴露已加载的 GameObject[] / AudioClip[] 等字段，供 PlayerMove 代理属性读取
+///
+/// 【加载顺序】
+///   LoadAsync(so) → 并行加载模型、特效、音效 → 全部完成后返回
 ///
 /// 【释放】
-///   ReleaseAll() → 自增 _globalTicket（作废所有进行中的加载）
-///              → 遍历 _allHandles → Addressables.Release → 清空
+///   ReleaseAll() → 遍历 _allHandles → Addressables.Release → 清空
 /// ═══════════════════════════════════════════════════════════
 /// </summary>
 public class WeaponRuntimeAssets
@@ -44,20 +43,13 @@ public class WeaponRuntimeAssets
     public AudioClip[] runningVoices;
 
     // ============================================================
-    // Ticket 版本戳
-    // ============================================================
-
-    /// <summary>全局递增的 Ticket。每次新 LoadAsync / ReleaseAll 时 ++。</summary>
-    private static int _globalTicket;
-
-    /// <summary>本实例被创建时的 Ticket 快照。比对 _globalTicket 判断是否过时。</summary>
-    private int _myTicket;
-
-    // ============================================================
     // 内部状态
     // ============================================================
 
+    /// <summary>所有异步加载句柄，ReleaseAll 时统一释放</summary>
     private readonly List<AsyncOperationHandle> _allHandles = new List<AsyncOperationHandle>();
+
+    /// <summary>是否已释放</summary>
     private bool _released;
 
     // ============================================================
@@ -67,31 +59,29 @@ public class WeaponRuntimeAssets
     /// <summary>
     /// 从 WeaponDataSO 异步加载全部运行时资产。
     /// 返回 this，调用方通过返回的实例访问已加载资产。
-    /// 加载期间若外部发起新的加载，本实例所有回调自动作废。
     /// </summary>
     public async Task<WeaponRuntimeAssets> LoadAsync(WeaponDataSO so)
     {
         if (so == null) return this;
 
-        // ── 领取 Ticket：比全局快照多 1，同时作废所有旧实例的回调 ──
-        _myTicket = ++_globalTicket;
-
-        // ── 并行加载所有资产 ──
+        // ── 并行加载所有单项 ──
         var tasks = new List<Task>();
 
         tasks.Add(LoadSingleRef(so.weaponModelRef, clip => weaponModelPrefab = clip as GameObject));
-        tasks.Add(LoadRefArray(so.heavyAttackEffectRefs,   arr => heavyAttackEffects   = arr));
-        tasks.Add(LoadRefArray(so.heavyHitEffectRefs,      arr => heavyAttackHitEffects = arr));
-        tasks.Add(LoadRefArray(so.lightAttackEffectRefs,    arr => lightAttackEffects   = arr));
-        tasks.Add(LoadSingleRef(so.runningAttackEffectRef,  obj => runningAttackEffect  = obj as GameObject));
-        tasks.Add(LoadAudioRefArray(so.heavySwingSoundRefs,  arr => heavySwingSounds     = arr));
-        tasks.Add(LoadAudioRefArray(so.heavyHitSoundRefs,    arr => heavyHitSounds       = arr));
-        tasks.Add(LoadAudioRefArray(so.heavyVoiceRefs,       arr => heavyVoices          = arr));
-        tasks.Add(LoadAudioRefArray(so.lightSwingSoundRefs,  arr => lightSwingSounds     = arr));
-        tasks.Add(LoadAudioRefArray(so.lightHitSoundRefs,    arr => lightHitSounds       = arr));
-        tasks.Add(LoadAudioRefArray(so.lightVoiceRefs,       arr => lightVoices          = arr));
+
+        tasks.Add(LoadRefArray(so.heavyAttackEffectRefs, arr => heavyAttackEffects = arr));
+        tasks.Add(LoadRefArray(so.heavyHitEffectRefs, arr => heavyAttackHitEffects = arr));
+        tasks.Add(LoadRefArray(so.lightAttackEffectRefs, arr => lightAttackEffects = arr));
+        tasks.Add(LoadSingleRef(so.runningAttackEffectRef, obj => runningAttackEffect = obj as GameObject));
+
+        tasks.Add(LoadAudioRefArray(so.heavySwingSoundRefs, arr => heavySwingSounds = arr));
+        tasks.Add(LoadAudioRefArray(so.heavyHitSoundRefs, arr => heavyHitSounds = arr));
+        tasks.Add(LoadAudioRefArray(so.heavyVoiceRefs, arr => heavyVoices = arr));
+        tasks.Add(LoadAudioRefArray(so.lightSwingSoundRefs, arr => lightSwingSounds = arr));
+        tasks.Add(LoadAudioRefArray(so.lightHitSoundRefs, arr => lightHitSounds = arr));
+        tasks.Add(LoadAudioRefArray(so.lightVoiceRefs, arr => lightVoices = arr));
         tasks.Add(LoadSingleAudioRef(so.slidingWhooshSoundRef, clip => slidingWhooshSound = clip));
-        tasks.Add(LoadAudioRefArray(so.runningVoiceRefs,     arr => runningVoices        = arr));
+        tasks.Add(LoadAudioRefArray(so.runningVoiceRefs, arr => runningVoices = arr));
 
         await Task.WhenAll(tasks);
         return this;
@@ -102,56 +92,56 @@ public class WeaponRuntimeAssets
     // ============================================================
 
     /// <summary>
-    /// 释放所有 Addressables 句柄，同时作废所有进行中的异步回调。
+    /// 释放所有 Addressables 句柄，清空资产引用。
+    /// 调用时机：切武器 / 场景卸载。
     /// </summary>
     public void ReleaseAll()
     {
         if (_released) return;
         _released = true;
 
-        // 只释放已完成的句柄。仍在飞行中的句柄由各自 callback 在 await 返回后自行清理，
-        // 避免释放未完成的 handle 导致 callback 访问 handle.Status 时抛异常。
         foreach (var handle in _allHandles)
         {
-            if (handle.IsValid() && handle.IsDone)
+            if (handle.IsValid())
                 Addressables.Release(handle);
         }
         _allHandles.Clear();
 
-        weaponModelPrefab   = null;
-        heavyAttackEffects  = null;
+        // 清空所有引用，帮助 GC
+        weaponModelPrefab = null;
+        heavyAttackEffects = null;
         heavyAttackHitEffects = null;
-        lightAttackEffects  = null;
+        lightAttackEffects = null;
         runningAttackEffect = null;
-        heavySwingSounds    = null;
-        heavyHitSounds      = null;
-        heavyVoices         = null;
-        lightSwingSounds    = null;
-        lightHitSounds      = null;
-        lightVoices         = null;
-        slidingWhooshSound  = null;
-        runningVoices       = null;
+        heavySwingSounds = null;
+        heavyHitSounds = null;
+        heavyVoices = null;
+        lightSwingSounds = null;
+        lightHitSounds = null;
+        lightVoices = null;
+        slidingWhooshSound = null;
+        runningVoices = null;
     }
 
     // ============================================================
     // 内部工具
+    // 关键：使用 Addressables.LoadAssetAsync<T>(key) 而非
+    //       AssetReference.LoadAssetAsync()。
+    //       后者会在 AssetReference 实例上缓存内部 handle，
+    //       第二次调用时冲突 → "already been loaded" 错误。
+    //       RuntimeKey 直传绕过缓存，每次创建独立 handle。
     // ============================================================
-
-    /// <summary>检查本实例的 Ticket 是否仍然有效</summary>
-    private bool IsTicketValid() => _myTicket == _globalTicket;
 
     private async Task LoadSingleRef(AssetReferenceGameObject reference, System.Action<Object> onLoaded)
     {
         if (reference == null || !reference.RuntimeKeyIsValid()) return;
 
         var handle = Addressables.LoadAssetAsync<GameObject>(reference.RuntimeKey);
+
+        await System.Threading.Tasks.Task.Delay(UnityEngine.Random.Range(500, 2500)); 
+
         lock (_allHandles) _allHandles.Add(handle);
         await handle.Task;
-
-        // 实例已被释放（高频切武器）→ 自行清理仍飞行的句柄，不访问 handle.Status
-        if (_released) { if (handle.IsValid()) Addressables.Release(handle); return; }
-        // Ticket 校验：若已过时 → 立即释放，不执行回调
-        if (!IsTicketValid()) { if (handle.IsValid()) Addressables.Release(handle); return; }
 
         if (handle.Status == AsyncOperationStatus.Succeeded)
             onLoaded?.Invoke(handle.Result);
@@ -164,9 +154,6 @@ public class WeaponRuntimeAssets
         var handle = Addressables.LoadAssetAsync<AudioClip>(reference.RuntimeKey);
         lock (_allHandles) _allHandles.Add(handle);
         await handle.Task;
-
-        if (_released) { if (handle.IsValid()) Addressables.Release(handle); return; }
-        if (!IsTicketValid()) { if (handle.IsValid()) Addressables.Release(handle); return; }
 
         if (handle.Status == AsyncOperationStatus.Succeeded)
             onLoaded?.Invoke(handle.Result);
@@ -190,14 +177,12 @@ public class WeaponRuntimeAssets
 
             subTasks.Add(handle.Task.ContinueWith(_ =>
             {
-                if (!_released && IsTicketValid() && handle.Status == AsyncOperationStatus.Succeeded)
+                if (handle.Status == AsyncOperationStatus.Succeeded)
                     results[index] = handle.Result;
             }, TaskScheduler.FromCurrentSynchronizationContext()));
         }
 
         await Task.WhenAll(subTasks);
-
-        if (_released || !IsTicketValid()) return;
         onLoaded?.Invoke(results);
     }
 
@@ -219,14 +204,12 @@ public class WeaponRuntimeAssets
 
             subTasks.Add(handle.Task.ContinueWith(_ =>
             {
-                if (!_released && IsTicketValid() && handle.Status == AsyncOperationStatus.Succeeded)
+                if (handle.Status == AsyncOperationStatus.Succeeded)
                     results[index] = handle.Result;
             }, TaskScheduler.FromCurrentSynchronizationContext()));
         }
 
         await Task.WhenAll(subTasks);
-
-        if (_released || !IsTicketValid()) return;
         onLoaded?.Invoke(results);
     }
 }

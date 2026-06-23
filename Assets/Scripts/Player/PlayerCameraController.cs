@@ -21,11 +21,13 @@ public class PlayerCameraController : MonoBehaviour
 
     // 获取主控脚本的引用，用于读取玩家状态（是否死亡、是否锁敌等）
     private EldenRingMovement player;
+    private PlayerTargeting _targeting;
 
     void Start()
     {
         player = GetComponent<EldenRingMovement>();
-        
+        _targeting = GetComponent<PlayerTargeting>();
+
         if (cameraTransform == null)
             cameraTransform = Camera.main.transform;
     }
@@ -53,14 +55,14 @@ public class PlayerCameraController : MonoBehaviour
         currentPitch -= mouseY;
 
         // 2. 锁定时的强制接管
-        if (player.isLockedOn && player.lockedTarget != null)
+        if (_targeting.IsLockedOn && _targeting.CurrentTarget != null)
         {
-            Vector3 dirToTarget = player.lockedTarget.position - transform.position;
+            Vector3 dirToTarget = _targeting.CurrentTarget.position - transform.position;
             float targetYaw = Mathf.Atan2(dirToTarget.x, dirToTarget.z) * Mathf.Rad2Deg;
             currentYaw = Mathf.LerpAngle(currentYaw, targetYaw, Time.deltaTime * 10f);
 
             float distance = dirToTarget.magnitude;
-            float deltaY = player.lockedTarget.position.y - (transform.position.y + 1.5f);
+            float deltaY = _targeting.CurrentTarget.position.y - (transform.position.y + 1.5f);
             float ratio = Mathf.Clamp(deltaY / Mathf.Max(distance, 1f), -1f, 1f);
             float targetPitch = -Mathf.Asin(ratio) * Mathf.Rad2Deg;
             currentPitch = Mathf.LerpAngle(currentPitch, targetPitch + 10f, Time.deltaTime * 5f);

@@ -149,9 +149,6 @@ public class EldenRingMovement : MonoBehaviour
     /// <summary>当前武器已加载的运行时资产（特效、音效、模型等）及其 AA 句柄</summary>
     private WeaponRuntimeAssets _loadedWeaponAssets;
 
-    /// <summary>锁定系统（从主脚本拆出到 PlayerTargeting）</summary>
-    private PlayerTargeting _targeting;
-
     /// <summary>
     /// 武器加载代数。EquipWeaponAsync 每次调用 +1，异步加载完成后比对，
     /// 不匹配说明中途又有新切换 → 丢弃本次结果。
@@ -221,10 +218,17 @@ public class EldenRingMovement : MonoBehaviour
     private float combatCooldownTimer = 0f;
     private bool isInCombatEffective = false;   // 经过冷却过滤后的实际战斗状态
 
-    [Header("敌人层级")]
+    // ======= 锁定系统 =======
+    [Header("锁定设置")]
+    public float lockOnRadius = 20f;
     public LayerMask enemyLayer;
+    public Transform lockedTarget;
+    public bool isLockedOn;
 
-
+    [Header("锁定UI设置")]
+    public RectTransform lockOnUI;
+    
+    
     // 攻击相关
     // ==============================================================
     // 动作缓冲与连段系统 (Combo Buffer System)
@@ -306,10 +310,9 @@ public class EldenRingMovement : MonoBehaviour
         // 1. 【核心修复】：必须最先抓取所有管家组件！
         // 否则后续读档、赋值时会报 NullReferenceException 卡死游戏！
         // ==========================================
-        inputHandler = GetComponent<PlayerInputHandler>();
+        inputHandler = GetComponent<PlayerInputHandler>(); 
         animHandler = GetComponent<PlayerAnimatorHandler>();
         stats = GetComponent<PlayerStatsManager>();
-        _targeting = GetComponent<PlayerTargeting>();
 
         skillWaveSlash = GetComponent<Skill_WaveSlash>();
         if (skillWaveSlash != null) skillWaveSlash.Initialize(this, animHandler);
@@ -328,6 +331,7 @@ public class EldenRingMovement : MonoBehaviour
         locomotion.Initialize(this, inputHandler, animHandler, stats, controller);
 
         // 3. UI与鼠标设置
+        if (lockOnUI != null) lockOnUI.gameObject.SetActive(false);
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
         
@@ -404,6 +408,8 @@ public class EldenRingMovement : MonoBehaviour
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
+
+        HandleLockOnInput();
 
         // 战斗状态与BGM检测
         combatCheckTimer -= Time.deltaTime;
@@ -631,7 +637,96 @@ public class EldenRingMovement : MonoBehaviour
     }
     
 
+    // ======= 锁定目标逻辑 =======
+    void HandleLockOnInput()
+    {
+        if (inputHandler.LockOnInput) // 鼠标中键
+        {
+            if (isLockedOn) ClearLockOn();
+            else FindLockOnTarget();
+        }
 
+        if (isLockedOn)
+        {
+            if (lockedTarget == null || !lockedTarget.gameObject.activeInHierarchy)
+            {
+                ClearLockOn();
+            }
+            else
+            {
+                float dist = Vector3.Distance(transform.position, lockedTarget.position);
+                if (dist > lockOnRadius * 1.5f) ClearLockOn();
+            }
+        }
+    }
+
+    void FindLockOnTarget()
+    {
+        Collider[] cols = Physics.OverlapSphere(transform.position, lockOnRadius, enemyLayer);
+        Transform bestTarget = null;
+        float minAngle = float.MaxValue;
+
+        foreach (var col in cols)
+        {
+            BasicEnemyTest enemy = col.GetComponent<BasicEnemyTest>();
+
+            if (enemy != null && enemy.currentState != BasicEnemyTest.EnemyState.Hidden && !enemy.isDead && enemy.currentState != BasicEnemyTest.EnemyState.Hit) // 可根据需求放宽条件
+            {
+                Vector3 dirToEnemy = (col.transform.position - transform.position).normalized;
+                // 优先锁定屏幕视野前方的敌人
+                float angle = Vector3.Angle(Camera.main.transform.forward, dirToEnemy);
+
+                if (angle < 60f && angle < minAngle)
+                {
+                    minAngle = angle;
+                    // 如果敌人身上配置了专门的锁定点（比如胸口），则锁定该点
+                    bestTarget = enemy.lockOnPoint != null ? enemy.lockOnPoint : enemy.transform;
+                }
+            }
+        }
+
+        if (bestTarget != null)
+        {
+            lockedTarget = bestTarget;
+            isLockedOn = true;
+            //Debug.Log("锁定目标: " + bestTarget.parent?.name);
+            // 显示UI
+            if (lockOnUI != null) lockOnUI.gameObject.SetActive(true);
+        }
+    }
+
+    void ClearLockOn()
+    {
+        isLockedOn = false;
+        lockedTarget = null;
+        //Debug.Log("解除锁定");
+        // ======= 新加：隐藏UI =======
+        if (lockOnUI != null) lockOnUI.gameObject.SetActive(false);
+    }
+    
+    // ======= 新加：让UI实时跟随目标 =======
+    void LateUpdate()
+    {
+        if (isLockedOn && lockedTarget != null && lockOnUI != null)
+        {
+            // 将锁定的3D世界坐标，转换为屏幕上的2D坐标
+            Vector3 screenPos = Camera.main.WorldToScreenPoint(lockedTarget.position);
+
+            // screenPos.z 代表物体在相机前方还是后方
+            // 如果 z < 0 说明敌人在相机背后，此时虽然锁定了但为了不出现UI乱飞，可以暂时隐藏
+            if (screenPos.z < 0)
+            {
+                lockOnUI.gameObject.SetActive(false);
+            }
+            else
+            {
+                lockOnUI.gameObject.SetActive(true);
+                // 更新UI的位置
+                lockOnUI.position = screenPos;
+            }
+        }
+    }
+    
 
     void UpdateAnimationValues(bool hasMoveInput)
     {
@@ -645,7 +740,7 @@ public class EldenRingMovement : MonoBehaviour
             return;
         }    
 
-        if (_targeting.IsLockedOn)
+        if (isLockedOn)
         {
             float targetDir = inputHandler.MoveInput.x; 
             float speedMag = locomotion.currentSpeed / locomotion.runSpeed; 
@@ -1467,7 +1562,7 @@ public class EldenRingMovement : MonoBehaviour
         }
         
         // 强制结束当前攻击
-        if (currentState != ActionState.Dead && currentState != ActionState.Dodging)
+        if (isAttacking || isLightAttacking || isRunningAttack || isUltimateCasting || isCasting)
         {
             StopCoroutine("DodgeRoutine");
             currentState = ActionState.Hit;
@@ -2050,8 +2145,8 @@ public class EldenRingMovement : MonoBehaviour
 
     private bool IsInCombat()
     {
-        // 复用锁定半径来搜索敌人
-        Collider[] hitColliders = Physics.OverlapSphere(transform.position, _targeting.lockOnRadius, enemyLayer);
+        // 复用已有的锁定半径 lockOnRadius 来搜索敌人
+        Collider[] hitColliders = Physics.OverlapSphere(transform.position, lockOnRadius, enemyLayer);
         foreach (var col in hitColliders)
         {
             BasicEnemyTest enemy = col.GetComponent<BasicEnemyTest>();
@@ -2075,6 +2170,10 @@ public class EldenRingMovement : MonoBehaviour
         if (!Application.isPlaying) return;
         Gizmos.color = Color.blue;
         Gizmos.DrawRay(transform.position, transform.forward * 2);
+
+        // ======= 绘制搜索锁定半径 =======
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireSphere(transform.position, lockOnRadius);
     }
 
 
