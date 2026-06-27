@@ -11,7 +11,7 @@
 
 ## 项目简介
 
-**MyThirdPersonDemo** 是一个基于 Unity 6 开发的第三人称动作 RPG 原型。项目从零搭建，实现了魂系战斗、敌人 AI、RPG 成长、存档系统等完整的玩法循环，并在此过程中完成了从 Resources 到 Addressables 的资产管理重构。
+**烬刃:余火之契** 是一个基于 Unity 6 开发的第三人称动作 RPG 原型。项目从零搭建，实现了魂系战斗、敌人 AI、RPG 成长、存档系统等完整的玩法循环，并在此过程中完成了从 Resources 到 Addressables 的资产管理重构。
 
 - **引擎：** Unity 6000.3.11f1
 - **渲染管线：** Universal Render Pipeline (URP) 17.3
