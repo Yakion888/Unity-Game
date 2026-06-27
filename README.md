@@ -2,8 +2,10 @@
 
 > 一款受《艾尔登法环》启发的第三人称动作 RPG | Unity 6 + URP | 独立开发
 
-<!-- TODO: 在此放置 2-3 张战斗/场景 GIF 或截图 -->
-<!-- 推荐截图内容：剑气波技能、QTE 终极连斩、休息点交互 -->
+<p align="center">
+  <img src="Screenshots/火焰剑气.png" width="48%" alt="火焰剑气技能" />
+  <img src="Screenshots/qte技能.png" width="48%" alt="QTE 终极连斩" />
+</p>
 
 ---
 
